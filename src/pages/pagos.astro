@@ -1,0 +1,773 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { db, schema } from '../db';
+import { eq, and, gte, lte, desc } from 'drizzle-orm';
+
+export const prerender = false;
+
+// Interfaces de Tipo Seguro (Auditoría TypeScript Skill)
+interface CommitmentItem {
+  id: number;
+  name: string;
+  monthlyLimit: number;
+  currentSpent: number;
+  remaining: number;
+  isPaid: boolean;
+  dueDay: number;
+  dueText: string;
+  isUrgent: boolean;
+  materialIcon: string;
+  paymentMethodTag: string;
+  paymentMethodIcon: string;
+  subtitle: string;
+}
+
+interface ConfirmedPayment {
+  id: number;
+  title: string;
+  amount: number;
+  amountFormatted: string;
+  dateFormatted: string;
+  categoryName: string;
+}
+
+const now = new Date();
+const currentYear = now.getFullYear();
+const currentMonth = now.getMonth();
+const currentDay = now.getDate();
+
+const startOfMonth = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
+const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
+
+const currentMonthName = now.toLocaleDateString('es-HN', { month: 'long', year: 'numeric' });
+const capitalizedMonth = currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1);
+
+let pendingCommitments: CommitmentItem[] = [];
+let completedCommitments: CommitmentItem[] = [];
+let confirmedHistory: ConfirmedPayment[] = [];
+let totalMonthly = 0;
+let totalPaid = 0;
+let totalRemaining = 0;
+let progressPercentage = 0;
+let urgentItem: CommitmentItem | null = null;
+let allCategoriesList: Array<{ id: number; name: string }> = [];
+
+try {
+  // 1. Consultar categorías de la BD
+  const rawCategories = await db.select().from(schema.categories);
+  allCategoriesList = rawCategories.map((c) => ({ id: c.id, name: c.name }));
+
+  // Filtrar categorías que representan compromisos intocables/fijos
+  const commitmentCategories = rawCategories.filter((cat) => {
+    const n = cat.name.toLowerCase();
+    return n.includes('maestr') || n.includes('deuda') || n.includes('préstamo') || n.includes('fijo');
+  });
+
+  // Si por alguna razón la BD aún no tiene sembradas estas categorías, creamos fallback estructurado
+  const targetCategories = commitmentCategories.length > 0 ? commitmentCategories : [
+    { id: 998, name: 'Maestría', monthly_limit: '4350.00', icon: '🎓', payment_method_default: 'DEBITO' },
+    { id: 999, name: 'Deudas/Préstamos Fijos', monthly_limit: '4400.00', icon: '🏦', payment_method_default: 'DEBITO' },
+  ];
+
+  const processedCommitments: CommitmentItem[] = [];
+
+  for (const cat of targetCategories) {
+    let spent = 0;
+    const limit = parseFloat(cat.monthly_limit || '0');
+
+    if (cat.id < 900) {
+      const txs = await db
+        .select({ amount: schema.transactions.amount })
+        .from(schema.transactions)
+        .where(
+          and(
+            eq(schema.transactions.category_id, cat.id),
+            gte(schema.transactions.date, startOfMonth),
+            lte(schema.transactions.date, endOfMonth)
+          )
+        );
+
+      spent = txs.reduce((acc, t) => acc + parseFloat(t.amount || '0'), 0);
+    }
+
+    const isPaid = spent >= limit;
+    const lowerName = cat.name.toLowerCase();
+    const isDeuda = lowerName.includes('deuda') || lowerName.includes('préstamo');
+    const isMaestria = lowerName.includes('maestr');
+
+    const dueDay = isDeuda ? 20 : (isMaestria ? 28 : 25);
+    let dueText = '';
+    let isUrgent = false;
+
+    if (currentDay < dueDay) {
+      const daysLeft = dueDay - currentDay;
+      dueText = `Vence día ${dueDay} (en ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'})`;
+      if (daysLeft <= 4 && !isPaid) isUrgent = true;
+    } else if (currentDay === dueDay) {
+      dueText = `¡Vence hoy día ${dueDay}!`;
+      if (!isPaid) isUrgent = true;
+    } else {
+      dueText = `Venció día ${dueDay}`;
+    }
+
+    const item: CommitmentItem = {
+      id: cat.id,
+      name: cat.name,
+      monthlyLimit: limit,
+      currentSpent: spent,
+      remaining: Math.max(0, limit - spent),
+      isPaid,
+      dueDay,
+      dueText,
+      isUrgent,
+      materialIcon: isMaestria ? 'school' : (isDeuda ? 'account_balance' : 'receipt_long'),
+      paymentMethodTag: isDeuda ? 'Débito automático' : 'Transferencia bancaria',
+      paymentMethodIcon: isDeuda ? 'sync_alt' : 'account_balance',
+      subtitle: isMaestria ? 'Mensualidad Maestría' : 'Cuota Crédito Día 20',
+    };
+
+    processedCommitments.push(item);
+    totalMonthly += limit;
+    totalPaid += Math.min(spent, limit);
+
+    if (isUrgent && !urgentItem) {
+      urgentItem = item;
+    }
+  }
+
+  // Orden: Pendientes primero (con más urgencia), luego completados
+  processedCommitments.sort((a, b) => {
+    if (a.isPaid === b.isPaid) return a.dueDay - b.dueDay;
+    return a.isPaid ? 1 : -1;
+  });
+
+  pendingCommitments = processedCommitments.filter((c) => !c.isPaid);
+  completedCommitments = processedCommitments.filter((c) => c.isPaid);
+
+  totalRemaining = Math.max(0, totalMonthly - totalPaid);
+  progressPercentage = totalMonthly > 0 ? Math.min(100, Math.round((totalPaid / totalMonthly) * 100)) : 0;
+
+  // 2. Consultar historial de pagos confirmados del mes para estas categorías
+  const commitmentCatIds = targetCategories.map((c) => c.id).filter((id) => id < 900);
+  if (commitmentCatIds.length > 0) {
+    const rawHistory = await db
+      .select({
+        id: schema.transactions.id,
+        amount: schema.transactions.amount,
+        description: schema.transactions.description,
+        date: schema.transactions.date,
+        categoryName: schema.categories.name,
+      })
+      .from(schema.transactions)
+      .leftJoin(schema.categories, eq(schema.transactions.category_id, schema.categories.id))
+      .where(
+        and(
+          gte(schema.transactions.date, startOfMonth),
+          lte(schema.transactions.date, endOfMonth)
+        )
+      )
+      .orderBy(desc(schema.transactions.date))
+      .limit(10);
+
+    confirmedHistory = rawHistory
+      .filter((h) => {
+        const n = (h.categoryName || '').toLowerCase();
+        return n.includes('maestr') || n.includes('deuda') || n.includes('préstamo');
+      })
+      .map((h) => {
+        const d = new Date(h.date);
+        const amountNum = parseFloat(h.amount || '0');
+        return {
+          id: h.id,
+          title: h.description || h.categoryName || 'Pago registrado',
+          amount: amountNum,
+          amountFormatted: amountNum.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          dateFormatted: `Pagado el día ${d.getDate()}`,
+          categoryName: h.categoryName || 'Compromiso Fijo',
+        };
+      });
+  }
+} catch (error) {
+  console.error('Error cargando pagos programados:', error);
+}
+---
+
+<Layout title="Pagos Programados" activeTab="pagos">
+  <div class="flex flex-col w-full space-y-4 max-w-full overflow-hidden">
+    
+    <!-- Encabezado de Página Mobile-First Liquid Glass -->
+    <header class="flex items-center justify-between pt-1 pb-1">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-2xl bg-primary/20 text-primary flex items-center justify-center shrink-0 shadow-sm border border-primary/30">
+          <span class="material-symbols-outlined text-[20px]">calendar_month</span>
+        </div>
+        <div class="min-w-0">
+          <h1 class="font-extrabold text-lg sm:text-xl text-on-surface tracking-tight font-headline truncate">
+            Pagos Programados
+          </h1>
+          <p class="text-[11px] text-on-surface-variant truncate">
+            Compromisos intocables y vencimientos
+          </p>
+        </div>
+      </div>
+      <span class="bg-surface-container-high border border-outline-variant/30 px-3 py-1 rounded-full text-[11px] font-semibold text-primary capitalize shrink-0 shadow-sm">
+        {capitalizedMonth}
+      </span>
+    </header>
+
+    <!-- Resumen Superior: Compromisos del Mes (Canopy Nocturne Glass) -->
+    <section class="liquid-glass-card rounded-2xl p-4 shadow-md relative overflow-hidden border border-outline-variant/30" aria-label="Resumen de compromisos del mes">
+      <!-- Glow ambiental decorativo -->
+      <div class="absolute -right-8 -top-8 w-36 h-36 bg-primary/10 rounded-full blur-2xl pointer-events-none" aria-hidden="true"></div>
+
+      <div class="flex items-center justify-between mb-3 relative z-10">
+        <div class="flex items-center gap-1.5 min-w-0">
+          <span class="material-symbols-outlined text-primary text-[19px]">event_available</span>
+          <h2 class="font-bold text-sm sm:text-base text-on-surface font-headline truncate">
+            Compromisos del mes
+          </h2>
+        </div>
+        <span class="bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0">
+          Modo Supervivencia
+        </span>
+      </div>
+
+      <!-- Tarjetas de Estadísticas en Grid 2 Columnas Totalmente Fluido -->
+      <div class="grid grid-cols-2 gap-2.5 mb-3.5 relative z-10">
+        <div class="bg-surface-container-low/90 p-3 rounded-xl border border-outline-variant/15 flex flex-col justify-center min-w-0">
+          <span class="text-[11px] text-on-surface-variant block font-medium truncate">Total mensual</span>
+          <span class="text-base sm:text-lg font-extrabold text-on-surface tracking-tight font-headline tabular-nums mt-0.5 truncate">
+            L. {totalMonthly.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+        <div class="bg-surface-container-low/90 p-3 rounded-xl border border-outline-variant/15 flex flex-col justify-center min-w-0">
+          <span class="text-[11px] text-on-surface-variant block font-medium truncate">Restante por pagar</span>
+          <span class="text-base sm:text-lg font-extrabold text-secondary tracking-tight font-headline tabular-nums mt-0.5 truncate">
+            L. {totalRemaining.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+      </div>
+
+      <!-- Barra de Progreso y Cubrimiento -->
+      <div class="space-y-1.5 relative z-10">
+        <div class="flex justify-between items-center text-[11px] font-medium">
+          <span class="text-on-surface-variant flex items-center gap-1.5 truncate">
+            <span class="w-2 h-2 rounded-full bg-primary inline-block shrink-0 shadow-[0_0_6px_#1eb854]"></span>
+            <span>Ya cubierto: <strong class="text-on-surface font-bold tabular-nums">L. {totalPaid.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</strong></span>
+          </span>
+          <span class="text-primary font-bold shrink-0 tabular-nums">{progressPercentage}% completado</span>
+        </div>
+
+        <div class="w-full h-2.5 bg-surface-container-highest rounded-full overflow-hidden p-[1px]">
+          <div
+            class="h-full bg-primary rounded-full transition-all duration-700 ease-out shadow-[0_0_10px_rgba(30,184,84,0.5)]"
+            style={`width: ${progressPercentage}%;`}
+            role="progressbar"
+            aria-valuenow={progressPercentage}
+            aria-valuemin="0"
+            aria-valuemax="100"
+          ></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Alerta Próximo Vencimiento Crítico (Día 20) -->
+    {urgentItem && (
+      <section class="liquid-glass rounded-2xl p-3.5 border border-secondary/40 shadow-sm relative overflow-hidden" aria-label="Alerta de vencimiento próximo">
+        <div class="flex items-start gap-3">
+          <div class="w-9 h-9 rounded-xl bg-secondary/15 border border-secondary/30 flex items-center justify-center shrink-0 mt-0.5 text-secondary">
+            <span class="material-symbols-outlined text-[20px] animate-pulse">notifications_active</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-secondary">Vencimiento cercano</span>
+              <span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+              <span class="text-[10px] text-on-surface-variant font-medium">{urgentItem.dueText}</span>
+            </div>
+            <p class="text-xs text-on-surface leading-snug">
+              <strong class="font-bold text-on-surface">{urgentItem.name}</strong> (<span class="text-secondary font-bold tabular-nums">L. {urgentItem.monthlyLimit.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>) vence próximamente. Cuota inamovible de supervivencia.
+            </p>
+          </div>
+        </div>
+      </section>
+    )}
+
+    <!-- Selector de Pestañas Interactivas (Pendientes vs Completados) -->
+    <section class="flex flex-col space-y-3" aria-label="Filtro de compromisos por estado">
+      <div class="flex bg-surface-container-lowest p-1 rounded-2xl shadow-inner border border-outline-variant/25" id="tab-container" role="tablist">
+        <button
+          type="button"
+          class="flex-1 min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold text-on-primary bg-primary transition-all duration-200 flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+          id="tab-pendientes"
+          role="tab"
+          aria-selected="true"
+          aria-controls="view-pendientes"
+          onclick="window.switchCommitmentsTab('pendientes')"
+        >
+          <span>Pendientes</span>
+          <span class="min-w-[20px] h-5 px-1.5 rounded-full bg-on-primary/20 text-on-primary text-[11px] font-black flex items-center justify-center" id="badge-pendientes">
+            {pendingCommitments.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          class="flex-1 min-h-[44px] py-2 px-3 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-all duration-200 flex items-center justify-center gap-1.5 active:scale-95"
+          id="tab-completados"
+          role="tab"
+          aria-selected="false"
+          aria-controls="view-completados"
+          onclick="window.switchCommitmentsTab('completados')"
+        >
+          <span>Completados</span>
+          <span class="min-w-[20px] h-5 px-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] font-bold flex items-center justify-center" id="badge-completados">
+            {completedCommitments.length}
+          </span>
+        </button>
+      </div>
+
+      <!-- VISTA 1: Lista de Compromisos Pendientes -->
+      <div class="space-y-3" id="view-pendientes" role="tabpanel" aria-labelledby="tab-pendientes">
+        {pendingCommitments.length > 0 ? (
+          pendingCommitments.map((item) => (
+            <article
+              class="liquid-glass-card p-3.5 sm:p-4 rounded-2xl space-y-3 shadow-sm transition-all hover:bg-surface-container-high/60 border border-outline-variant/20 commitment-card"
+              id={`card-commitment-${item.id}`}
+              data-cat-id={item.id}
+            >
+              <!-- Fila Superior: Icono + Detalles + Monto con flex-wrap seguro para móvil -->
+              <div class="flex items-start justify-between gap-2.5">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                  <div class="w-10 h-10 rounded-2xl bg-surface-container-highest border border-outline-variant/30 flex items-center justify-center shrink-0 text-primary shadow-sm">
+                    <span class="material-symbols-outlined text-[21px]">{item.materialIcon}</span>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <h3 class="font-bold text-xs sm:text-sm text-on-surface font-headline truncate">
+                      {item.name}
+                    </h3>
+                    <div class="flex items-center gap-1 text-[11px] text-secondary mt-0.5">
+                      <span class="material-symbols-outlined text-[14px]">
+                        {item.isUrgent ? 'warning' : 'schedule'}
+                      </span>
+                      <span class="font-medium truncate">{item.dueText}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="text-right shrink-0">
+                  <span class="font-bold text-sm sm:text-base text-on-surface font-headline block tabular-nums">
+                    L. {item.monthlyLimit.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+                  </span>
+                  <span class="text-[10px] text-on-surface-variant block font-medium">Cuota fija</span>
+                </div>
+              </div>
+
+              <!-- Fila Inferior: Método de Pago + Botón de Acción con soporte responsivo total -->
+              <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-outline-variant/15">
+                <span class="bg-surface-container-low text-on-surface-variant text-[11px] font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-outline-variant/15">
+                  <span class="material-symbols-outlined text-[14px] text-primary">{item.paymentMethodIcon}</span>
+                  <span>{item.paymentMethodTag}</span>
+                </span>
+
+                <button
+                  type="button"
+                  class="btn-mark-paid min-h-[38px] px-3.5 py-1.5 rounded-full bg-surface-container-highest text-on-surface hover:bg-primary hover:text-on-primary text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm border border-outline-variant/25 active:scale-95"
+                  data-card-id={`card-commitment-${item.id}`}
+                  data-cat-id={item.id}
+                  data-cat-name={item.name}
+                  data-cat-amount={item.monthlyLimit}
+                  aria-label={`Marcar como pagado ${item.name} por L. ${item.monthlyLimit.toFixed(2)}`}
+                >
+                  <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                  <span>Marcar Pagado</span>
+                </button>
+              </div>
+            </article>
+          ))
+        ) : (
+          <div class="liquid-glass rounded-2xl p-6 text-center space-y-2 border border-primary/30">
+            <div class="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center mx-auto shadow-sm">
+              <span class="material-symbols-outlined text-[28px]">task_alt</span>
+            </div>
+            <h4 class="font-bold text-sm text-on-surface font-headline">¡Sin compromisos pendientes!</h4>
+            <p class="text-xs text-on-surface-variant max-w-xs mx-auto">
+              Has cubierto todas tus cuotas fijas obligatorias de este mes. Tu liquidez restante está protegida.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <!-- VISTA 2: Lista de Completados (Oculta inicialmente si hay pendientes) -->
+      <div class="hidden space-y-3" id="view-completados" role="tabpanel" aria-labelledby="tab-completados">
+        {completedCommitments.length > 0 ? (
+          completedCommitments.map((item) => (
+            <article class="liquid-glass-card p-3.5 sm:p-4 rounded-2xl space-y-2 border border-primary/30 opacity-95">
+              <div class="flex items-start justify-between gap-2.5">
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                  <div class="w-10 h-10 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center shrink-0 text-primary shadow-sm">
+                    <span class="material-symbols-outlined text-[21px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <h3 class="font-bold text-xs sm:text-sm text-on-surface font-headline truncate">
+                      {item.name}
+                    </h3>
+                    <span class="text-[11px] text-primary flex items-center gap-1 mt-0.5 font-medium">
+                      <span class="material-symbols-outlined text-[14px]">verified</span>
+                      Liquidado en este ciclo
+                    </span>
+                  </div>
+                </div>
+
+                <div class="text-right shrink-0">
+                  <span class="font-bold text-sm sm:text-base text-primary font-headline block tabular-nums">
+                    L. {item.monthlyLimit.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+                  </span>
+                  <span class="bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mt-0.5">
+                    PAGADO
+                  </span>
+                </div>
+              </div>
+            </article>
+          ))
+        ) : (
+          <div class="liquid-glass rounded-2xl p-6 text-center space-y-2">
+            <span class="material-symbols-outlined text-[32px] text-on-surface-variant block mx-auto">history</span>
+            <p class="text-xs text-on-surface-variant">
+              Aún no has marcado pagos como completados en el ciclo de {capitalizedMonth}.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- Historial Reciente de Pagos Confirmados en el Mes -->
+    <section class="space-y-2.5 pt-1" aria-label="Historial de pagos confirmados">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="font-bold text-xs sm:text-sm text-on-surface flex items-center gap-1.5 font-headline">
+          <span class="material-symbols-outlined text-primary text-[19px]">verified</span>
+          <span>Confirmados este mes</span>
+        </h2>
+        <span class="text-[11px] text-primary font-bold" id="label-history-count">
+          {confirmedHistory.length} completados
+        </span>
+      </div>
+
+      <div class="liquid-glass-card rounded-2xl overflow-hidden shadow-sm divide-y divide-outline-variant/15 border border-outline-variant/20" id="recent-history-list">
+        {confirmedHistory.length > 0 ? (
+          confirmedHistory.map((entry) => (
+            <div class="p-3 sm:p-3.5 flex items-center justify-between transition-colors hover:bg-surface-container-high/40">
+              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                <div class="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary">
+                  <span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <h3 class="font-bold text-xs text-on-surface truncate font-headline">{entry.title}</h3>
+                  <span class="text-[10px] text-on-surface-variant block">{entry.dateFormatted}</span>
+                </div>
+              </div>
+              <div class="text-right shrink-0 pl-2">
+                <span class="font-bold text-xs text-on-surface tabular-nums block">L. {entry.amountFormatted}</span>
+                <span class="text-[10px] text-primary font-bold block">Exitoso</span>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div class="p-4 text-center text-[11px] text-on-surface-variant">
+            No hay pagos registrados para compromisos fijos en {capitalizedMonth}.
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- Botón de Acción Principal: Registrar o Añadir Nuevo Pago Programado -->
+    <section class="pt-2 pb-3">
+      <button
+        type="button"
+        class="w-full min-h-[48px] rounded-2xl bg-primary text-on-primary hover:bg-primary-focus active:scale-[0.98] transition-all duration-200 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+        onclick="window.openNewPaymentModal()"
+        aria-label="Registrar un nuevo pago programado o compromiso"
+      >
+        <span class="material-symbols-outlined text-[20px]">add_circle</span>
+        <span>Añadir / Registrar pago fijo</span>
+      </button>
+    </section>
+
+    <!-- Notificación Toast Táctil Efímera (Canopy Nocturne) -->
+    <div
+      class="fixed bottom-22 left-1/2 -translate-x-1/2 z-50 bg-surface-container-highest px-4 py-2.5 rounded-full shadow-2xl flex items-center gap-2 opacity-0 pointer-events-none transition-all duration-300 transform translate-y-3 border border-outline-variant/30 max-w-[90vw]"
+      id="toast-delight"
+      role="status"
+      aria-live="polite"
+    >
+      <span class="material-symbols-outlined text-primary text-[18px] shrink-0">check_circle</span>
+      <span class="text-xs font-semibold text-on-surface truncate" id="toast-message">Compromiso marcado como pagado</span>
+    </div>
+
+    <!-- Modal para Registrar Nuevo Pago Fijo / Programado -->
+    <dialog id="modal_new_scheduled" class="modal modal-bottom sm:modal-middle">
+      <div class="modal-box liquid-glass-card border border-outline-variant/30 text-on-surface p-5">
+        <form method="dialog">
+          <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 text-on-surface-variant hover:text-on-surface" aria-label="Cerrar modal">✕</button>
+        </form>
+
+        <div class="flex items-center gap-2.5 mb-4">
+          <div class="w-9 h-9 rounded-2xl bg-primary/20 text-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-[20px]">event_repeat</span>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-on-surface font-headline">Registrar Pago de Compromiso</h3>
+            <p class="text-xs text-on-surface-variant">Ingresa un pago manual para tus compromisos fijos</p>
+          </div>
+        </div>
+
+        <form id="form-scheduled-pay" class="space-y-3.5">
+          <div>
+            <label for="sched_cat_id" class="block text-xs font-semibold text-on-surface-variant mb-1">
+              Compromiso / Categoría:
+            </label>
+            <select
+              id="sched_cat_id"
+              name="category_id"
+              class="select select-bordered w-full bg-surface-container text-on-surface rounded-xl text-xs"
+              required
+            >
+              {allCategoriesList.map((c) => (
+                <option value={c.id} selected={c.name.toLowerCase().includes('maestr') || c.name.toLowerCase().includes('deuda')}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label for="sched_amount" class="block text-xs font-semibold text-on-surface-variant mb-1">
+              Monto a Pagar (Lempiras):
+            </label>
+            <div class="relative">
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-primary">L.</span>
+              <input
+                type="number"
+                id="sched_amount"
+                name="amount"
+                step="0.01"
+                min="0.01"
+                placeholder="4350.00"
+                class="input input-bordered w-full bg-surface-container text-on-surface pl-8 rounded-xl text-sm font-bold"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label for="sched_description" class="block text-xs font-semibold text-on-surface-variant mb-1">
+              Nota / Concepto del Pago:
+            </label>
+            <input
+              type="text"
+              id="sched_description"
+              name="description"
+              placeholder="Ej: Pago cuota maestría mes en curso"
+              class="input input-bordered w-full bg-surface-container text-on-surface rounded-xl text-xs"
+            />
+          </div>
+
+          <div class="pt-2 flex gap-2">
+            <button
+              type="button"
+              class="btn btn-ghost flex-1 rounded-xl text-xs"
+              onclick="document.getElementById('modal_new_scheduled').close()"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              id="btn-submit-scheduled"
+              class="btn btn-primary flex-1 rounded-xl text-xs font-bold shadow-md shadow-primary/20"
+            >
+              Confirmar Pago
+            </button>
+          </div>
+        </form>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button>cerrar</button>
+      </form>
+    </dialog>
+
+  </div>
+</Layout>
+
+<script>
+  let pendingCount = parseInt(document.getElementById('badge-pendientes')?.innerText || '0', 10);
+  let completedCount = parseInt(document.getElementById('badge-completados')?.innerText || '0', 10);
+
+  // Selector de Pestañas Interactivas
+  function switchCommitmentsTab(tab: 'pendientes' | 'completados') {
+    const tabPendientes = document.getElementById('tab-pendientes');
+    const tabCompletados = document.getElementById('tab-completados');
+    const viewPendientes = document.getElementById('view-pendientes');
+    const viewCompletados = document.getElementById('view-completados');
+
+    if (!tabPendientes || !tabCompletados || !viewPendientes || !viewCompletados) return;
+
+    if (tab === 'pendientes') {
+      tabPendientes.className = 'flex-1 min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold text-on-primary bg-primary transition-all duration-200 flex items-center justify-center gap-1.5 shadow-sm active:scale-95';
+      tabPendientes.setAttribute('aria-selected', 'true');
+      tabCompletados.className = 'flex-1 min-h-[44px] py-2 px-3 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-all duration-200 flex items-center justify-center gap-1.5 active:scale-95';
+      tabCompletados.setAttribute('aria-selected', 'false');
+      viewPendientes.classList.remove('hidden');
+      viewCompletados.classList.add('hidden');
+    } else {
+      tabCompletados.className = 'flex-1 min-h-[44px] py-2 px-3 rounded-xl text-xs font-bold text-on-primary bg-primary transition-all duration-200 flex items-center justify-center gap-1.5 shadow-sm active:scale-95';
+      tabCompletados.setAttribute('aria-selected', 'true');
+      tabPendientes.className = 'flex-1 min-h-[44px] py-2 px-3 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-all duration-200 flex items-center justify-center gap-1.5 active:scale-95';
+      tabPendientes.setAttribute('aria-selected', 'false');
+      viewPendientes.classList.add('hidden');
+      viewCompletados.classList.remove('hidden');
+    }
+  }
+
+  (window as any).switchCommitmentsTab = switchCommitmentsTab;
+
+  // Notificación Toast
+  function showToast(msg: string) {
+    const toast = document.getElementById('toast-delight');
+    const toastMsg = document.getElementById('toast-message');
+    if (!toast || !toastMsg) return;
+
+    toastMsg.innerText = msg;
+    toast.classList.remove('opacity-0', 'translate-y-3', 'pointer-events-none');
+    toast.classList.add('opacity-100', 'translate-y-0');
+
+    setTimeout(() => {
+      toast.classList.remove('opacity-100', 'translate-y-0');
+      toast.classList.add('opacity-0', 'translate-y-3', 'pointer-events-none');
+    }, 2500);
+  }
+
+  (window as any).showToast = showToast;
+
+  // Botón "Marcar Pagado"
+  document.querySelectorAll<HTMLButtonElement>('.btn-mark-paid').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const cardId = btn.dataset.cardId || '';
+      const catId = parseInt(btn.dataset.catId || '0', 10);
+      const catName = btn.dataset.catName || 'Compromiso';
+      const amount = parseFloat(btn.dataset.catAmount || '0');
+
+      if (!catId || isNaN(amount) || amount <= 0) return;
+
+      const confirmed = confirm(`¿Confirmar registro de pago para "${catName}" por L. ${amount.toFixed(2)}?`);
+      if (!confirmed) return;
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Guardando...`;
+
+      try {
+        const response = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount,
+            category_id: catId,
+            description: `Pago mensual ${catName}`,
+            payment_method: 'DEBITO_EFECTIVO',
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          showToast(data.error || 'Error al registrar pago');
+          btn.disabled = false;
+          btn.innerHTML = `<span class="material-symbols-outlined text-[16px]">check_circle</span> Marcar Pagado`;
+        } else {
+          // Animación suave de salida
+          const card = document.getElementById(cardId);
+          if (card) {
+            card.style.opacity = '0';
+            card.style.transform = 'scale(0.96)';
+            card.style.transition = 'all 0.3s ease-out';
+          }
+
+          showToast(`¡${catName} registrado como PAGADO!`);
+
+          // Recargar tras 800ms para recalcular métricas y vista
+          setTimeout(() => {
+            window.location.reload();
+          }, 800);
+        }
+      } catch (err) {
+        showToast('Error de red al procesar el pago.');
+        btn.disabled = false;
+        btn.innerHTML = `<span class="material-symbols-outlined text-[16px]">check_circle</span> Marcar Pagado`;
+      }
+    });
+  });
+
+  // Modal para nuevo compromiso o pago
+  function openNewPaymentModal() {
+    const modal = document.getElementById('modal_new_scheduled') as HTMLDialogElement | null;
+    modal?.showModal();
+  }
+
+  (window as any).openNewPaymentModal = openNewPaymentModal;
+
+  // Manejador del Formulario en Modal
+  const formScheduled = document.getElementById('form-scheduled-pay') as HTMLFormElement | null;
+  formScheduled?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btnSubmit = document.getElementById('btn-submit-scheduled') as HTMLButtonElement | null;
+    const catSelect = document.getElementById('sched_cat_id') as HTMLSelectElement | null;
+    const amountInput = document.getElementById('sched_amount') as HTMLInputElement | null;
+    const descInput = document.getElementById('sched_description') as HTMLInputElement | null;
+
+    if (!catSelect || !amountInput) return;
+
+    const category_id = parseInt(catSelect.value, 10);
+    const amount = parseFloat(amountInput.value);
+    const description = (descInput?.value || '').trim() || 'Pago de compromiso';
+
+    if (isNaN(amount) || amount <= 0) {
+      alert('Ingresa un monto válido mayor a 0');
+      return;
+    }
+
+    if (btnSubmit) {
+      btnSubmit.disabled = true;
+      btnSubmit.innerText = 'Registrando...';
+    }
+
+    try {
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          category_id,
+          description,
+          payment_method: 'DEBITO_EFECTIVO',
+        }),
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        showToast(resData.error || 'Error al guardar');
+        if (btnSubmit) {
+          btnSubmit.disabled = false;
+          btnSubmit.innerText = 'Confirmar Pago';
+        }
+      } else {
+        showToast('¡Pago registrado con éxito!');
+        const modal = document.getElementById('modal_new_scheduled') as HTMLDialogElement | null;
+        modal?.close();
+        setTimeout(() => window.location.reload(), 700);
+      }
+    } catch (err) {
+      showToast('Error de red.');
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerText = 'Confirmar Pago';
+      }
+    }
+  });
+</script>

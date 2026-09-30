@@ -575,13 +575,13 @@ const overallSpentPct = variableBudgetTotal > 0
         <!-- Tarjetas de Compromisos Intocables (Checklist Financiero) -->
         <div class="bg-surface-container-lowest/60 rounded-xl overflow-hidden divide-y divide-outline-variant/15 border border-outline-variant/20">
           {untouchableCommitments.map((cat) => (
-            <div class="p-3.5 flex items-center justify-between hover:bg-surface-container-high/30 transition-colors">
-              <div class="flex items-center gap-3 min-w-0">
+            <div class="p-3.5 flex flex-col xs:flex-row xs:items-center justify-between gap-3 hover:bg-surface-container-high/30 transition-colors">
+              <div class="flex items-center gap-3 min-w-0 flex-1">
                 <div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary shrink-0 shadow-sm">
                   <span class="material-symbols-outlined text-[20px]">{cat.materialIcon}</span>
                 </div>
-                <div class="min-w-0">
-                  <h3 class="font-bold text-xs text-on-surface truncate font-headline">
+                <div class="min-w-0 flex-1">
+                  <h3 class="font-bold text-xs sm:text-sm text-on-surface truncate font-headline">
                     {cat.name}
                   </h3>
                   <span class="text-[10px] text-on-surface-variant block">
@@ -590,20 +590,20 @@ const overallSpentPct = variableBudgetTotal > 0
                 </div>
               </div>
 
-              <div class="flex flex-col items-end gap-1 shrink-0">
-                <span class="font-bold text-xs text-on-surface tabular-nums">
+              <div class="flex items-center justify-between xs:justify-end gap-2.5 shrink-0 pl-13 xs:pl-0">
+                <span class="font-bold text-xs sm:text-sm text-on-surface tabular-nums">
                   L. {cat.monthlyLimit.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
                 </span>
 
                 {cat.isPaid ? (
-                  <span class="bg-primary/20 text-primary px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                  <span class="bg-primary/20 text-primary px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm shrink-0">
                     <span class="material-symbols-outlined text-[13px]">check_circle</span>
                     PAGADO
                   </span>
                 ) : (
                   <button
                     type="button"
-                    class="btn-pay-commitment text-[11px] font-semibold text-secondary bg-surface-container px-3 py-1 rounded-full hover:bg-primary hover:text-on-primary transition-all active:scale-95 shadow-sm border border-outline-variant/20"
+                    class="btn-pay-commitment text-[11px] font-semibold text-secondary bg-surface-container px-3.5 py-1.5 rounded-full hover:bg-primary hover:text-on-primary transition-all active:scale-95 shadow-sm border border-outline-variant/20 shrink-0 min-h-[36px]"
                     data-cat-id={cat.id}
                     data-cat-name={cat.name}
                     data-cat-amount={cat.monthlyLimit}
@@ -615,6 +615,15 @@ const overallSpentPct = variableBudgetTotal > 0
             </div>
           ))}
         </div>
+
+        <!-- Acceso directo a Vista Completa de Pagos -->
+        <a
+          href="/pagos"
+          class="w-full py-2.5 px-3 rounded-xl bg-surface-container text-primary hover:bg-primary hover:text-on-primary text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm border border-primary/20 active:scale-95"
+        >
+          <span>Abrir vista completa de Pagos Programados</span>
+          <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+        </a>
       </section>
 
       <!-- Nota Informativa de Liquidez Congelada -->

@@ -141,7 +141,7 @@ const { title, activeTab = 'dashboard' } = Astro.props;
             )}
           </a>
           <a
-            href="/?tab=compromisos"
+            href="/pagos"
             class={`flex flex-col items-center justify-center min-w-[64px] min-h-[46px] px-3 py-1 rounded-2xl gap-0.5 transition-all relative ${
               activeTab === 'pagos'
                 ? 'text-primary font-bold liquid-glass-pill scale-[1.03]'
@@ -149,7 +149,7 @@ const { title, activeTab = 'dashboard' } = Astro.props;
             }`}
             aria-label="Ir a Pagos y Compromisos Intocables"
           >
-            <span class="material-symbols-outlined text-[21px]">payments</span>
+            <span class="material-symbols-outlined text-[21px]">event_repeat</span>
             <span class="text-[10px] font-medium tracking-tight">Pagos</span>
             {activeTab === 'pagos' && (
               <span class="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_#1eb854]"></span>
