@@ -1,12 +1,11 @@
 import type { APIRoute } from 'astro';
 import { db, schema } from '../../db';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
+import { getLiveUsdHnlRate } from './exchange-rate';
 
 export const prerender = false;
 
-const DEFAULT_USD_RATE = 25.00; // 1 USD = 25.00 Lempiras (Tasa de referencia bancaria HN)
-
-// GET: Obtener transacciones recientes y resumen mensual
+// GET: Obtener transacciones recientes con desglose bimoneda
 export const GET: APIRoute = async () => {
   try {
     const allTransactions = await db
@@ -41,7 +40,7 @@ export const GET: APIRoute = async () => {
   }
 };
 
-// POST: Registrar nuevo gasto con validación en Lempiras y soporte de Dólares
+// POST: Registrar nuevo gasto con conversión en tiempo real
 export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json();
@@ -50,7 +49,6 @@ export const POST: APIRoute = async ({ request }) => {
     const parsedAmount = Number(amount);
     const parsedCategoryId = Number(category_id);
     const selectedCurrency = currency === 'USD' ? 'USD' : 'HNL';
-    const rate = selectedCurrency === 'USD' ? Number(exchange_rate) || DEFAULT_USD_RATE : 1.0;
 
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       return new Response(
@@ -64,6 +62,17 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({ error: 'Debe especificar una categoría válida.' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Obtener la tasa de cambio en vivo si la moneda es USD
+    let appliedRate = 1.0;
+    if (selectedCurrency === 'USD') {
+      if (exchange_rate && !isNaN(Number(exchange_rate)) && Number(exchange_rate) > 0) {
+        appliedRate = Number(exchange_rate);
+      } else {
+        const liveInfo = await getLiveUsdHnlRate();
+        appliedRate = liveInfo.rate;
+      }
     }
 
     // 1. Obtener la categoría y su límite mensual en Lempiras
@@ -80,8 +89,8 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // Convertir el gasto a Lempiras (HNL) para validación presupuestaria
-    const amountInHnl = selectedCurrency === 'USD' ? parsedAmount * rate : parsedAmount;
+    // 2. Convertir el gasto a Lempiras (HNL) con la tasa en tiempo real
+    const amountInHnl = selectedCurrency === 'USD' ? parsedAmount * appliedRate : parsedAmount;
 
     const transactionDate = date ? new Date(date) : new Date();
     const currentYear = transactionDate.getFullYear();
@@ -90,7 +99,7 @@ export const POST: APIRoute = async ({ request }) => {
     const startOfMonth = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
     const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
 
-    // 2. Sumar las transacciones del mes actual de esa categoría (en Lempiras)
+    // 3. Sumar las transacciones del mes actual de esa categoría (en Lempiras)
     const monthlyTransactions = await db
       .select({ amount: schema.transactions.amount })
       .from(schema.transactions)
@@ -110,7 +119,7 @@ export const POST: APIRoute = async ({ request }) => {
     const monthlyLimitHnl = parseFloat(category.monthly_limit);
     const projectedTotalHnl = currentSpentHnl + amountInHnl;
 
-    // 3. Validar si el nuevo gasto supera el monthly_limit en Lempiras
+    // 4. Validar si el nuevo gasto supera el monthly_limit en Lempiras
     if (projectedTotalHnl > monthlyLimitHnl) {
       const excessHnl = (projectedTotalHnl - monthlyLimitHnl).toFixed(2);
       return new Response(
@@ -118,10 +127,12 @@ export const POST: APIRoute = async ({ request }) => {
           error: `Gasto rechazado: este registro excede el límite mensual de la categoría "${category.name}".`,
           details: {
             categoryName: category.name,
+            currency: selectedCurrency,
+            rateUsed: appliedRate.toFixed(4),
             monthlyLimit: `L. ${monthlyLimitHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`,
             currentSpent: `L. ${currentSpentHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`,
             attemptedAmount: selectedCurrency === 'USD'
-              ? `$${parsedAmount.toFixed(2)} USD (aprox. L. ${amountInHnl.toFixed(2)})`
+              ? `$${parsedAmount.toFixed(2)} USD (convertido a L. ${amountInHnl.toFixed(2)} a tasa L. ${appliedRate.toFixed(2)})`
               : `L. ${parsedAmount.toFixed(2)}`,
             projectedTotal: `L. ${projectedTotalHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`,
             exceededBy: `L. ${excessHnl}`,
@@ -134,14 +145,14 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 4. Registrar la transacción (almacenando el equivalente en Lps y la moneda original)
+    // 5. Registrar la transacción con trazabilidad de la tasa de conversión
     const [newTransaction] = await db
       .insert(schema.transactions)
       .values({
         amount: amountInHnl.toFixed(2), // Consolidado en Lempiras
         currency: selectedCurrency,
         original_amount: parsedAmount.toFixed(2),
-        exchange_rate: rate.toFixed(4),
+        exchange_rate: appliedRate.toFixed(4),
         category_id: parsedCategoryId,
         description: description ? String(description).trim() : null,
         date: transactionDate,
@@ -157,6 +168,7 @@ export const POST: APIRoute = async ({ request }) => {
           categoryName: category.name,
           currency: selectedCurrency,
           originalAmount: parsedAmount.toFixed(2),
+          rateUsed: appliedRate.toFixed(4),
           amountInHnl: amountInHnl.toFixed(2),
           monthlyLimitHnl: monthlyLimitHnl.toFixed(2),
           newTotalSpentHnl: projectedTotalHnl.toFixed(2),

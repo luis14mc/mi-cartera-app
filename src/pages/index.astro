@@ -1,17 +1,21 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { db, schema } from '../db';
-import { eq, and, gte, lte, asc } from 'drizzle-orm';
+import { eq, and, gte, lte, asc, desc } from 'drizzle-orm';
+import { getLiveUsdHnlRate } from './api/exchange-rate';
 
 export const prerender = false;
 
-const USD_RATE = 25.00; // 1 USD = 25.00 Lempiras (Tasa de referencia para Honduras)
+// Obtener la tasa de cambio en tiempo real durante el SSR
+const liveRateData = await getLiveUsdHnlRate();
+const LIVE_USD_RATE = liveRateData.rate;
 
 interface CategoryView {
   id: number;
   name: string;
   monthlyLimitHnl: number;
   currentSpentHnl: number;
+  remainingHnl: number;
   percentage: number;
   isExceeded: boolean;
   isNearLimit: boolean;
@@ -34,9 +38,22 @@ interface PaymentView {
   isDay20: boolean;
 }
 
+interface TransactionView {
+  id: number;
+  description: string;
+  categoryName: string;
+  amountHnl: string;
+  currency: string;
+  originalAmount: string;
+  exchangeRate: string;
+  isUsd: boolean;
+  dateFormatted: string;
+}
+
 let dbConfigured = true;
 let categoriesView: CategoryView[] = [];
 let upcomingPaymentsView: PaymentView[] = [];
+let recentTransactionsView: TransactionView[] = [];
 let totalBudgetHnl = 0;
 let totalSpentHnl = 0;
 let errorMessage = '';
@@ -63,6 +80,7 @@ try {
 
     const spent = catTransactions.reduce((acc, t) => acc + parseFloat(t.amount || '0'), 0);
     const limit = parseFloat(cat.monthly_limit);
+    const remaining = Math.max(0, limit - spent);
     const percentage = limit > 0 ? Math.min(Math.round((spent / limit) * 100), 100) : 0;
     const isExceeded = spent >= limit;
     const isNearLimit = !isExceeded && spent >= limit * 0.85;
@@ -72,6 +90,7 @@ try {
       name: cat.name,
       monthlyLimitHnl: limit,
       currentSpentHnl: spent,
+      remainingHnl: remaining,
       percentage,
       isExceeded,
       isNearLimit,
@@ -96,7 +115,7 @@ try {
     const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     const currency = p.currency || 'HNL';
     const rawAmount = parseFloat(p.amount);
-    const amountInHnl = currency === 'USD' ? rawAmount * USD_RATE : rawAmount;
+    const amountInHnl = currency === 'USD' ? rawAmount * LIVE_USD_RATE : rawAmount;
 
     let formattedAmount = '';
     let equivalentAmount = '';
@@ -106,7 +125,7 @@ try {
       equivalentAmount = `~L. ${amountInHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`;
     } else {
       formattedAmount = `L. ${rawAmount.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`;
-      equivalentAmount = `~$${(rawAmount / USD_RATE).toFixed(2)} USD`;
+      equivalentAmount = `~$${(rawAmount / LIVE_USD_RATE).toFixed(2)} USD`;
     }
 
     return {
@@ -124,17 +143,53 @@ try {
       isDay20: dueDate.getDate() === 20,
     };
   });
+
+  // 3. Obtener transacciones recientes con detalle bimoneda
+  const rawTransactions = await db
+    .select({
+      id: schema.transactions.id,
+      amount: schema.transactions.amount,
+      currency: schema.transactions.currency,
+      originalAmount: schema.transactions.original_amount,
+      exchangeRate: schema.transactions.exchange_rate,
+      description: schema.transactions.description,
+      date: schema.transactions.date,
+      categoryName: schema.categories.name,
+    })
+    .from(schema.transactions)
+    .leftJoin(schema.categories, eq(schema.transactions.category_id, schema.categories.id))
+    .orderBy(desc(schema.transactions.date))
+    .limit(5);
+
+  recentTransactionsView = rawTransactions.map((t) => {
+    const isUsd = t.currency === 'USD';
+    const orig = t.originalAmount ? parseFloat(t.originalAmount).toFixed(2) : parseFloat(t.amount).toFixed(2);
+    const dateObj = new Date(t.date);
+
+    return {
+      id: t.id,
+      description: t.description || 'Sin concepto',
+      categoryName: t.categoryName || 'General',
+      amountHnl: parseFloat(t.amount).toLocaleString('es-HN', { minimumFractionDigits: 2 }),
+      currency: t.currency,
+      originalAmount: orig,
+      exchangeRate: parseFloat(t.exchangeRate || '1').toFixed(2),
+      isUsd,
+      dateFormatted: dateObj.toLocaleDateString('es-HN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+    };
+  });
 } catch (error: any) {
   dbConfigured = false;
   errorMessage = error.message || 'No se pudo conectar a la base de datos Neon.';
 
-  // Fallback demo en Lempiras con equivalencias en USD
+  // Fallback demo con datos en Lempiras y conversiones en USD
   categoriesView = [
     {
       id: 1,
       name: 'Supermercado y Alimentación',
       monthlyLimitHnl: 9000.0,
       currentSpentHnl: 6250.0,
+      remainingHnl: 2750.0,
       percentage: 69,
       isExceeded: false,
       isNearLimit: false,
@@ -146,6 +201,7 @@ try {
       name: 'Transporte y Combustible',
       monthlyLimitHnl: 3500.0,
       currentSpentHnl: 3150.0,
+      remainingHnl: 350.0,
       percentage: 90,
       isExceeded: false,
       isNearLimit: true,
@@ -157,6 +213,7 @@ try {
       name: 'Servicios del Hogar',
       monthlyLimitHnl: 3200.0,
       currentSpentHnl: 1800.0,
+      remainingHnl: 1400.0,
       percentage: 56,
       isExceeded: false,
       isNearLimit: false,
@@ -175,7 +232,7 @@ try {
       currency: 'HNL',
       amountInHnl: 950.0,
       formattedAmount: 'L. 950.00',
-      equivalentAmount: '~$38.00 USD',
+      equivalentAmount: `~$${(950 / LIVE_USD_RATE).toFixed(2)} USD`,
       formattedDate: 'En 1 día',
       isPaid: false,
       daysRemaining: 1,
@@ -187,9 +244,9 @@ try {
       title: 'Suscripción Software (USD)',
       amount: '22.99',
       currency: 'USD',
-      amountInHnl: 22.99 * USD_RATE,
+      amountInHnl: 22.99 * LIVE_USD_RATE,
       formattedAmount: '$22.99 USD',
-      equivalentAmount: `~L. ${(22.99 * USD_RATE).toFixed(2)}`,
+      equivalentAmount: `~L. ${(22.99 * LIVE_USD_RATE).toFixed(2)}`,
       formattedDate: 'En 2 días',
       isPaid: false,
       daysRemaining: 2,
@@ -203,12 +260,37 @@ try {
       currency: 'HNL',
       amountInHnl: 3500.0,
       formattedAmount: 'L. 3,500.00',
-      equivalentAmount: '~$140.00 USD',
+      equivalentAmount: `~$${(3500 / LIVE_USD_RATE).toFixed(2)} USD`,
       formattedDate: 'Día 20',
       isPaid: false,
       daysRemaining: 5,
       isUrgent: false,
       isDay20: true,
+    },
+  ];
+
+  recentTransactionsView = [
+    {
+      id: 1,
+      description: 'Compra en Amazon (Demo)',
+      categoryName: 'Supermercado y Alimentación',
+      amountHnl: (35.00 * LIVE_USD_RATE).toFixed(2),
+      currency: 'USD',
+      originalAmount: '35.00',
+      exchangeRate: LIVE_USD_RATE.toFixed(2),
+      isUsd: true,
+      dateFormatted: 'Hoy, 09:30',
+    },
+    {
+      id: 2,
+      description: 'Gasolina Puma',
+      categoryName: 'Transporte y Combustible',
+      amountHnl: '850.00',
+      currency: 'HNL',
+      originalAmount: '850.00',
+      exchangeRate: '1.00',
+      isUsd: false,
+      dateFormatted: 'Ayer, 18:15',
     },
   ];
 }
@@ -219,7 +301,32 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
 ---
 
 <Layout title="Dashboard de Gastos en Lempiras y Dólares">
-  <!-- Banner Informativo de Conexión a Base de Datos -->
+  <!-- Barra de Tasa de Cambio en Tiempo Real -->
+  <div class="bg-base-200 border border-base-300 rounded-2xl p-2.5 mb-5 flex items-center justify-between text-xs shadow-inner">
+    <div class="flex items-center gap-2">
+      <span class="relative flex h-2.5 w-2.5">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-success"></span>
+      </span>
+      <span class="font-bold text-neutral">Tasa en tiempo real:</span>
+      <span class="badge badge-success text-white font-extrabold text-xs">
+        1 USD = L. {LIVE_USD_RATE.toFixed(2)} HNL
+      </span>
+    </div>
+    <button
+      id="btn-refresh-rate"
+      type="button"
+      title="Actualizar tasa de cambio en vivo"
+      class="btn btn-ghost btn-xs text-base-content/70 hover:text-primary gap-1"
+    >
+      <svg id="rate-refresh-icon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      <span class="text-[10px]">Actualizar</span>
+    </button>
+  </div>
+
+  <!-- Banner Informativo de Conexión a Base de Datos si no está configurada -->
   {!dbConfigured && (
     <div class="alert alert-warning shadow-lg mb-6 text-sm">
       <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
@@ -227,28 +334,25 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
       </svg>
       <div>
         <p class="font-bold">Modo de Demostración (Datos en Lempiras)</p>
-        <p class="text-xs opacity-90">Configura <code class="badge badge-sm font-mono">DATABASE_URL</code> en tu archivo <code class="badge badge-sm font-mono">.env</code> para conectar tu Neon PostgreSQL.</p>
+        <p class="text-xs opacity-90">Configura <code class="badge badge-sm font-mono">DATABASE_URL</code> en <code class="badge badge-sm font-mono">.env</code> para sincronizar con tu base de datos Neon.</p>
       </div>
     </div>
   )}
 
-  <!-- 1. Tarjeta Resumen General en Lempiras (con equivalente en USD) -->
+  <!-- 1. Tarjeta Resumen General en Lempiras con Equivalente en USD -->
   <section class="card bg-gradient-to-br from-primary to-emerald-800 text-primary-content shadow-xl mb-6 overflow-hidden">
     <div class="card-body p-5">
       <div class="flex justify-between items-start">
         <div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs uppercase tracking-wider font-semibold opacity-85">Presupuesto Mensual</span>
-            <span class="badge badge-sm bg-black/20 text-white border-0 font-medium">1 USD = L. {USD_RATE.toFixed(2)}</span>
-          </div>
+          <span class="text-xs uppercase tracking-wider font-semibold opacity-85">Presupuesto Mensual</span>
           <h2 class="text-3xl font-black mt-1 tracking-tight">
             L. {totalSpentHnl.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             <span class="text-xs font-normal opacity-80 block sm:inline">
               / L. {totalBudgetHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
             </span>
           </h2>
-          <p class="text-xs text-primary-content/80 mt-0.5">
-            Equivalente en Dólares: ${(totalSpentHnl / USD_RATE).toFixed(2)} / ${(totalBudgetHnl / USD_RATE).toFixed(2)} USD
+          <p class="text-xs text-primary-content/80 mt-1">
+            Equivalente: ${(totalSpentHnl / LIVE_USD_RATE).toFixed(2)} / ${(totalBudgetHnl / LIVE_USD_RATE).toFixed(2)} USD
           </p>
         </div>
         <div class="radial-progress bg-primary-content/10 text-primary-content text-xs font-bold shrink-0" style={`--value:${overallPercentage}; --size:3.2rem; --thickness:4px;`} role="progressbar">
@@ -289,7 +393,7 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
             <span class="font-bold text-sm text-neutral">{cat.name}</span>
             <div class="flex items-center gap-1.5">
               <span class="text-[11px] text-base-content/50 font-medium">
-                ~${(cat.currentSpentHnl / USD_RATE).toFixed(0)} / ${(cat.monthlyLimitHnl / USD_RATE).toFixed(0)} USD
+                ~${(cat.currentSpentHnl / LIVE_USD_RATE).toFixed(0)} / ${(cat.monthlyLimitHnl / LIVE_USD_RATE).toFixed(0)} USD
               </span>
               <span class={`badge badge-sm font-semibold ${cat.badgeColor}`}>
                 {cat.percentage}%
@@ -322,7 +426,7 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
     </div>
   </section>
 
-  <!-- 3. Formulario para Registrar Nuevo Gasto (Bimoneda: Lps o USD) -->
+  <!-- 3. Formulario para Registrar Nuevo Gasto con Conversión en Vivo -->
   <section class="card bg-base-100 border border-base-200 shadow-md mb-6">
     <div class="card-body p-5">
       <div class="flex justify-between items-center mb-2">
@@ -332,7 +436,7 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
           </svg>
           Registrar Transacción
         </h3>
-        <span class="badge badge-ghost badge-sm text-[11px]">Bimoneda</span>
+        <span class="badge badge-primary badge-outline badge-sm text-[11px] font-semibold">Conversión en vivo</span>
       </div>
 
       <!-- Selector de Moneda (Tabs) -->
@@ -358,17 +462,16 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
 
       <form id="transaction-form" class="space-y-3">
         <input type="hidden" id="selected_currency" name="currency" value="HNL" />
-        <input type="hidden" id="exchange_rate" name="exchange_rate" value={USD_RATE} />
 
         <!-- Selector de Categoría -->
         <div class="form-control">
           <label class="label py-1">
-            <span class="label-text text-xs font-semibold">Categoría</span>
+            <span class="label-text text-xs font-semibold">Categoría de Gasto</span>
           </label>
           <select id="category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100 font-medium">
             <option value="" disabled selected>Selecciona una categoría...</option>
             {categoriesView.map((c) => (
-              <option value={c.id}>
+              <option value={c.id} data-limit={c.monthlyLimitHnl} data-spent={c.currentSpentHnl} data-remaining={c.remainingHnl}>
                 {c.name} (Límite: L. {c.monthlyLimitHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })})
               </option>
             ))}
@@ -378,7 +481,7 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
         <!-- Monto -->
         <div class="form-control">
           <div class="flex justify-between items-center py-1">
-            <label class="label-text text-xs font-semibold">Monto</label>
+            <label class="label-text text-xs font-semibold">Monto del Gasto</label>
             <span id="currency-indicator" class="text-[11px] text-base-content/60 font-medium">
               Moneda: Lempiras (L.)
             </span>
@@ -395,14 +498,39 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
               min="0.01"
               placeholder="0.00"
               required
-              class="input input-bordered input-sm w-full pl-8 font-bold text-neutral"
+              class="input input-bordered input-sm w-full pl-8 font-bold text-neutral text-base"
             />
           </div>
-          <!-- Vista previa de conversión en tiempo real -->
-          <div id="conversion-preview" class="text-xs text-base-content/70 mt-1 font-medium hidden">
-            <span>Conversión estimada: </span>
-            <strong id="conversion-text" class="text-primary font-bold">L. 0.00</strong>
-            <span class="text-[10px] text-base-content/50 ml-1">(1 USD = L. {USD_RATE.toFixed(2)})</span>
+
+          <!-- Tarjeta de Conversión en Tiempo Real -->
+          <div id="conversion-card" class="bg-primary/5 border border-primary/20 rounded-xl p-2.5 mt-2 hidden">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-semibold text-neutral">Conversión a Lempiras:</span>
+              <span id="live-conversion-amount" class="text-sm font-black text-primary">L. 0.00</span>
+            </div>
+            <div class="flex justify-between items-center text-[11px] text-base-content/60 mt-1">
+              <span>Tasa aplicada: 1 USD = L. <span id="display-rate">{LIVE_USD_RATE.toFixed(2)}</span></span>
+              <button type="button" id="btn-toggle-custom-rate" class="link link-primary text-[10px]">Ajustar tasa bancaria</button>
+            </div>
+
+            <!-- Campo opcional para ajustar la tasa bancaria si el usuario lo desea -->
+            <div id="custom-rate-container" class="mt-2 pt-2 border-t border-primary/10 hidden">
+              <label class="label-text text-[10px] block mb-1">Tasa de cambio personalizada (opcional):</label>
+              <div class="flex items-center gap-2">
+                <input
+                  type="number"
+                  id="custom-exchange-rate"
+                  step="0.01"
+                  min="1"
+                  value={LIVE_USD_RATE.toFixed(2)}
+                  class="input input-bordered input-xs w-28 font-semibold"
+                />
+                <button type="button" id="btn-reset-rate" class="btn btn-ghost btn-xs text-[10px]">Restablecer</button>
+              </div>
+            </div>
+
+            <!-- Impacto en presupuesto en tiempo real -->
+            <div id="budget-impact-message" class="text-[11px] mt-1.5 pt-1.5 border-t border-primary/10 font-medium"></div>
           </div>
         </div>
 
@@ -415,7 +543,7 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
             type="text"
             id="description"
             name="description"
-            placeholder="Ej. Supermercado, Gasolina, Netflix..."
+            placeholder="Ej. Compra en Amazon, Netflix, Supermercado..."
             class="input input-bordered input-sm w-full"
           />
         </div>
@@ -424,7 +552,7 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
         <button
           type="submit"
           id="submit-btn"
-          class="btn btn-primary btn-sm w-full mt-2 font-bold normal-case text-white"
+          class="btn btn-primary btn-sm w-full mt-2 font-bold normal-case text-white shadow-md"
         >
           <span id="btn-text">Guardar Gasto</span>
           <span id="btn-spinner" class="loading loading-spinner loading-xs hidden"></span>
@@ -433,7 +561,62 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
     </div>
   </section>
 
-  <!-- 4. Próximos Pagos Programados (Lps & USD) -->
+  <!-- 4. Últimos Movimientos con Desglose Bimoneda -->
+  <section class="mb-6">
+    <div class="flex justify-between items-center mb-3">
+      <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        Últimos Gastos Registrados
+      </h3>
+      <span class="text-xs text-base-content/60 font-medium">{recentTransactionsView.length} recientes</span>
+    </div>
+
+    {recentTransactionsView.length === 0 ? (
+      <div class="card bg-base-100 border border-base-200 p-6 text-center text-xs text-base-content/60">
+        Aún no has registrado transacciones este mes.
+      </div>
+    ) : (
+      <div class="space-y-2.5">
+        {recentTransactionsView.map((t) => (
+          <div class="card bg-base-100 border border-base-200 shadow-sm p-3 flex flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${t.isUsd ? 'bg-info/15 text-info' : 'bg-primary/15 text-primary'}`}>
+                {t.isUsd ? '$' : 'L.'}
+              </div>
+              <div>
+                <h4 class="font-bold text-sm text-neutral leading-tight">
+                  {t.description}
+                </h4>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span class="badge badge-ghost badge-xs">{t.categoryName}</span>
+                  <span class="text-[11px] text-base-content/50">{t.dateFormatted}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-right">
+              {t.isUsd ? (
+                <div>
+                  <span class="font-black text-sm text-info block">${t.originalAmount} USD</span>
+                  <span class="text-[11px] font-semibold text-neutral block">➔ L. {t.amountHnl}</span>
+                  <span class="text-[9px] text-base-content/50 block">Tasa: {t.exchangeRate}</span>
+                </div>
+              ) : (
+                <div>
+                  <span class="font-black text-sm text-neutral block">L. {t.amountHnl}</span>
+                  <span class="text-[10px] text-base-content/50 block">HNL</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </section>
+
+  <!-- 5. Próximos Pagos Programados (Lps & USD) -->
   <section class="mb-4">
     <div class="flex justify-between items-center mb-3">
       <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
@@ -500,17 +683,58 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
 </Layout>
 
 <script>
-  const USD_EXCHANGE_RATE = 25.00;
+  let currentLiveRate = 26.83; // Tasa por defecto inicial
 
-  // Elementos del selector de moneda
+  // Elementos UI
   const btnHnl = document.getElementById('btn-currency-hnl') as HTMLButtonElement;
   const btnUsd = document.getElementById('btn-currency-usd') as HTMLButtonElement;
   const selectedCurrencyInput = document.getElementById('selected_currency') as HTMLInputElement;
   const currencyPrefix = document.getElementById('currency-prefix') as HTMLSpanElement;
   const currencyIndicator = document.getElementById('currency-indicator') as HTMLSpanElement;
   const amountInput = document.getElementById('amount') as HTMLInputElement;
-  const conversionPreview = document.getElementById('conversion-preview') as HTMLDivElement;
-  const conversionText = document.getElementById('conversion-text') as HTMLSpanElement;
+  const categorySelect = document.getElementById('category_id') as HTMLSelectElement;
+
+  const conversionCard = document.getElementById('conversion-card') as HTMLDivElement;
+  const liveConversionAmount = document.getElementById('live-conversion-amount') as HTMLSpanElement;
+  const displayRateSpan = document.getElementById('display-rate') as HTMLSpanElement;
+  const customRateContainer = document.getElementById('custom-rate-container') as HTMLDivElement;
+  const customExchangeRateInput = document.getElementById('custom-exchange-rate') as HTMLInputElement;
+  const btnToggleCustomRate = document.getElementById('btn-toggle-custom-rate') as HTMLButtonElement;
+  const btnResetRate = document.getElementById('btn-reset-rate') as HTMLButtonElement;
+  const budgetImpactMessage = document.getElementById('budget-impact-message') as HTMLDivElement;
+  const btnRefreshRate = document.getElementById('btn-refresh-rate') as HTMLButtonElement;
+  const rateRefreshIcon = document.getElementById('rate-refresh-icon') as SVGElement;
+
+  // Obtener tasa de cambio en vivo desde la API
+  async function fetchLiveRate() {
+    try {
+      rateRefreshIcon?.classList.add('animate-spin');
+      const res = await fetch('/api/exchange-rate');
+      const data = await res.json();
+      if (data.success && data.rate) {
+        currentLiveRate = data.rate;
+        if (displayRateSpan) displayRateSpan.textContent = currentLiveRate.toFixed(2);
+        if (customExchangeRateInput && !customRateContainer.classList.contains('hidden')) {
+          customExchangeRateInput.value = currentLiveRate.toFixed(2);
+        }
+        updateConversionAndBudgetImpact();
+      }
+    } catch (e) {
+      console.warn('Error al obtener tasa en vivo:', e);
+    } finally {
+      setTimeout(() => {
+        rateRefreshIcon?.classList.remove('animate-spin');
+      }, 500);
+    }
+  }
+
+  function getEffectiveRate(): number {
+    if (!customRateContainer?.classList.contains('hidden') && customExchangeRateInput) {
+      const custom = parseFloat(customExchangeRateInput.value);
+      if (!isNaN(custom) && custom > 0) return custom;
+    }
+    return currentLiveRate;
+  }
 
   function updateCurrency(curr: 'HNL' | 'USD') {
     selectedCurrencyInput.value = curr;
@@ -519,37 +743,92 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
       btnUsd.className = 'btn btn-sm flex-1 font-bold btn-ghost text-neutral normal-case';
       currencyPrefix.textContent = 'L.';
       currencyIndicator.textContent = 'Moneda: Lempiras (L.)';
+      conversionCard.classList.add('hidden');
     } else {
       btnUsd.className = 'btn btn-sm flex-1 font-bold btn-primary text-white normal-case shadow-sm';
       btnHnl.className = 'btn btn-sm flex-1 font-bold btn-ghost text-neutral normal-case';
       currencyPrefix.textContent = '$';
       currencyIndicator.textContent = 'Moneda: Dólares ($ USD)';
+      conversionCard.classList.remove('hidden');
     }
-    updateConversion();
+    updateConversionAndBudgetImpact();
   }
 
-  function updateConversion() {
+  function updateConversionAndBudgetImpact() {
     const val = parseFloat(amountInput.value);
+    const isUsd = selectedCurrencyInput.value === 'USD';
+
     if (isNaN(val) || val <= 0) {
-      conversionPreview.classList.add('hidden');
+      if (isUsd) {
+        liveConversionAmount.textContent = 'L. 0.00';
+        budgetImpactMessage.innerHTML = '<span class="text-base-content/50">Ingresa un monto para calcular la conversión.</span>';
+      }
       return;
     }
 
-    conversionPreview.classList.remove('hidden');
-    if (selectedCurrencyInput.value === 'USD') {
-      const hnl = (val * USD_EXCHANGE_RATE).toFixed(2);
-      conversionText.textContent = `L. ${hnl}`;
+    const rate = getEffectiveRate();
+    const amountInHnl = isUsd ? val * rate : val;
+
+    if (isUsd) {
+      conversionCard.classList.remove('hidden');
+      liveConversionAmount.textContent = `L. ${amountInHnl.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      if (displayRateSpan) displayRateSpan.textContent = rate.toFixed(2);
+    }
+
+    // Impacto en el presupuesto de la categoría seleccionada
+    const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+    if (selectedOption && selectedOption.value) {
+      const limit = parseFloat(selectedOption.dataset.limit || '0');
+      const spent = parseFloat(selectedOption.dataset.spent || '0');
+      const remaining = parseFloat(selectedOption.dataset.remaining || '0');
+      const projected = spent + amountInHnl;
+      const willExceed = projected > limit;
+
+      if (willExceed) {
+        const excess = (projected - limit).toFixed(2);
+        budgetImpactMessage.innerHTML = `
+          <div class="text-error font-bold flex items-center gap-1">
+            ⚠️ <span>¡Alerta! Este gasto superará el límite de la categoría por L. ${excess}.</span>
+          </div>
+        `;
+      } else {
+        const pctImpact = limit > 0 ? ((amountInHnl / limit) * 100).toFixed(1) : '0';
+        const newRemaining = (remaining - amountInHnl).toFixed(2);
+        budgetImpactMessage.innerHTML = `
+          <div class="text-success font-semibold flex items-center gap-1">
+            ✓ <span>Consumirá ${pctImpact}% del límite mensual. Saldo restante: L. ${newRemaining}</span>
+          </div>
+        `;
+      }
     } else {
-      const usd = (val / USD_EXCHANGE_RATE).toFixed(2);
-      conversionText.textContent = `$${usd} USD`;
+      budgetImpactMessage.innerHTML = '<span class="text-base-content/50">Selecciona una categoría para ver el impacto presupuestario.</span>';
     }
   }
 
   btnHnl?.addEventListener('click', () => updateCurrency('HNL'));
   btnUsd?.addEventListener('click', () => updateCurrency('USD'));
-  amountInput?.addEventListener('input', updateConversion);
+  amountInput?.addEventListener('input', updateConversionAndBudgetImpact);
+  categorySelect?.addEventListener('change', updateConversionAndBudgetImpact);
 
-  // Manejo del formulario de envío
+  btnToggleCustomRate?.addEventListener('click', () => {
+    customRateContainer.classList.toggle('hidden');
+    updateConversionAndBudgetImpact();
+  });
+
+  customExchangeRateInput?.addEventListener('input', updateConversionAndBudgetImpact);
+
+  btnResetRate?.addEventListener('click', () => {
+    if (customExchangeRateInput) customExchangeRateInput.value = currentLiveRate.toFixed(2);
+    customRateContainer.classList.add('hidden');
+    updateConversionAndBudgetImpact();
+  });
+
+  btnRefreshRate?.addEventListener('click', fetchLiveRate);
+
+  // Inicializar cargando la tasa en vivo al abrir la aplicación
+  fetchLiveRate();
+
+  // Envío del formulario
   const form = document.getElementById('transaction-form') as HTMLFormElement;
   const alertBox = document.getElementById('form-alert') as HTMLDivElement;
   const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
@@ -573,13 +852,14 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
     e.preventDefault();
     hideAlert();
 
-    const categoryId = (document.getElementById('category_id') as HTMLSelectElement).value;
-    const amount = (document.getElementById('amount') as HTMLInputElement).value;
+    const categoryId = categorySelect.value;
+    const amount = amountInput.value;
     const description = (document.getElementById('description') as HTMLInputElement).value;
     const currency = selectedCurrencyInput.value;
+    const rate = getEffectiveRate();
 
     submitBtn.disabled = true;
-    btnText.textContent = 'Verificando límite...';
+    btnText.textContent = 'Verificando y convirtiendo...';
     btnSpinner.classList.remove('hidden');
 
     try {
@@ -590,7 +870,7 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
           category_id: categoryId,
           amount: parseFloat(amount),
           currency,
-          exchange_rate: USD_EXCHANGE_RATE,
+          exchange_rate: rate,
           description,
         }),
       });
@@ -600,12 +880,13 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
       if (!response.ok) {
         let msg = result.error || 'No fue posible registrar el gasto.';
         if (result.details) {
-          msg += `<br/><span class="text-[11px] opacity-90 mt-1 block">Límite: ${result.details.monthlyLimit} | Gastado: ${result.details.currentSpent} | Intentado: ${result.details.attemptedAmount} | Exceso: ${result.details.exceededBy}</span>`;
+          msg += `<br/><span class="text-[11px] opacity-90 mt-1 block">Límite: ${result.details.monthlyLimit} | Gastado: ${result.details.currentSpent} | Intento: ${result.details.attemptedAmount} | Exceso: ${result.details.exceededBy}</span>`;
         }
         showAlert(msg, 'error');
       } else {
         const remaining = result.summary?.remainingBudgetHnl ? `L. ${result.summary.remainingBudgetHnl}` : '';
-        showAlert(`¡Gasto registrado con éxito! Saldo disponible restante: ${remaining}`, 'success');
+        const converted = result.summary?.currency === 'USD' ? ` (L. ${result.summary.amountInHnl} a tasa L. ${result.summary.rateUsed})` : '';
+        showAlert(`¡Gasto registrado con éxito!${converted} Saldo restante: ${remaining}`, 'success');
         form.reset();
         updateCurrency('HNL');
         setTimeout(() => {
