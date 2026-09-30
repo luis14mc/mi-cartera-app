@@ -5,11 +5,13 @@ import { eq, and, gte, lte, asc } from 'drizzle-orm';
 
 export const prerender = false;
 
+const USD_RATE = 25.00; // 1 USD = 25.00 Lempiras (Tasa de referencia para Honduras)
+
 interface CategoryView {
   id: number;
   name: string;
-  monthlyLimit: number;
-  currentSpent: number;
+  monthlyLimitHnl: number;
+  currentSpentHnl: number;
   percentage: number;
   isExceeded: boolean;
   isNearLimit: boolean;
@@ -21,6 +23,10 @@ interface PaymentView {
   id: number;
   title: string;
   amount: string;
+  currency: string;
+  amountInHnl: number;
+  formattedAmount: string;
+  equivalentAmount: string;
   formattedDate: string;
   isPaid: boolean;
   daysRemaining: number;
@@ -31,8 +37,8 @@ interface PaymentView {
 let dbConfigured = true;
 let categoriesView: CategoryView[] = [];
 let upcomingPaymentsView: PaymentView[] = [];
-let totalBudget = 0;
-let totalSpent = 0;
+let totalBudgetHnl = 0;
+let totalSpentHnl = 0;
 let errorMessage = '';
 
 try {
@@ -64,8 +70,8 @@ try {
     categoriesView.push({
       id: cat.id,
       name: cat.name,
-      monthlyLimit: limit,
-      currentSpent: spent,
+      monthlyLimitHnl: limit,
+      currentSpentHnl: spent,
       percentage,
       isExceeded,
       isNearLimit,
@@ -73,8 +79,8 @@ try {
       badgeColor: isExceeded ? 'badge-error text-white' : isNearLimit ? 'badge-warning' : 'badge-ghost',
     });
 
-    totalBudget += limit;
-    totalSpent += spent;
+    totalBudgetHnl += limit;
+    totalSpentHnl += spent;
   }
 
   // 2. Obtener pagos programados
@@ -88,11 +94,30 @@ try {
   upcomingPaymentsView = rawPayments.map((p) => {
     const dueDate = new Date(p.due_date);
     const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const currency = p.currency || 'HNL';
+    const rawAmount = parseFloat(p.amount);
+    const amountInHnl = currency === 'USD' ? rawAmount * USD_RATE : rawAmount;
+
+    let formattedAmount = '';
+    let equivalentAmount = '';
+
+    if (currency === 'USD') {
+      formattedAmount = `$${rawAmount.toFixed(2)} USD`;
+      equivalentAmount = `~L. ${amountInHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`;
+    } else {
+      formattedAmount = `L. ${rawAmount.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`;
+      equivalentAmount = `~$${(rawAmount / USD_RATE).toFixed(2)} USD`;
+    }
+
     return {
       id: p.id,
       title: p.title,
-      amount: parseFloat(p.amount).toFixed(2),
-      formattedDate: dueDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
+      amount: rawAmount.toFixed(2),
+      currency,
+      amountInHnl,
+      formattedAmount,
+      equivalentAmount,
+      formattedDate: dueDate.toLocaleDateString('es-HN', { day: 'numeric', month: 'short' }),
       isPaid: p.is_paid,
       daysRemaining: diffDays,
       isUrgent: diffDays <= 1,
@@ -103,14 +128,14 @@ try {
   dbConfigured = false;
   errorMessage = error.message || 'No se pudo conectar a la base de datos Neon.';
 
-  // Fallback para visualización inicial previa a la configuración de Neon
+  // Fallback demo en Lempiras con equivalencias en USD
   categoriesView = [
     {
       id: 1,
-      name: 'Alimentación y Supermercado',
-      monthlyLimit: 400.0,
-      currentSpent: 280.5,
-      percentage: 70,
+      name: 'Supermercado y Alimentación',
+      monthlyLimitHnl: 9000.0,
+      currentSpentHnl: 6250.0,
+      percentage: 69,
       isExceeded: false,
       isNearLimit: false,
       progressColor: 'progress-primary',
@@ -118,9 +143,9 @@ try {
     },
     {
       id: 2,
-      name: 'Transporte y Gasolina',
-      monthlyLimit: 150.0,
-      currentSpent: 135.0,
+      name: 'Transporte y Combustible',
+      monthlyLimitHnl: 3500.0,
+      currentSpentHnl: 3150.0,
       percentage: 90,
       isExceeded: false,
       isNearLimit: true,
@@ -129,24 +154,28 @@ try {
     },
     {
       id: 3,
-      name: 'Servicios Básicos',
-      monthlyLimit: 180.0,
-      currentSpent: 90.0,
-      percentage: 50,
+      name: 'Servicios del Hogar',
+      monthlyLimitHnl: 3200.0,
+      currentSpentHnl: 1800.0,
+      percentage: 56,
       isExceeded: false,
       isNearLimit: false,
       progressColor: 'progress-primary',
       badgeColor: 'badge-ghost',
     },
   ];
-  totalBudget = 730;
-  totalSpent = 505.5;
+  totalBudgetHnl = 15700;
+  totalSpentHnl = 11200;
 
   upcomingPaymentsView = [
     {
       id: 1,
-      title: 'Internet Fibra Óptica',
-      amount: '45.00',
+      title: 'Internet Fibra Residencial',
+      amount: '950.00',
+      currency: 'HNL',
+      amountInHnl: 950.0,
+      formattedAmount: 'L. 950.00',
+      equivalentAmount: '~$38.00 USD',
       formattedDate: 'En 1 día',
       isPaid: false,
       daysRemaining: 1,
@@ -155,22 +184,41 @@ try {
     },
     {
       id: 2,
-      title: 'Tarjeta de Crédito (Corte día 20)',
-      amount: '120.00',
+      title: 'Suscripción Software (USD)',
+      amount: '22.99',
+      currency: 'USD',
+      amountInHnl: 22.99 * USD_RATE,
+      formattedAmount: '$22.99 USD',
+      equivalentAmount: `~L. ${(22.99 * USD_RATE).toFixed(2)}`,
       formattedDate: 'En 2 días',
       isPaid: false,
       daysRemaining: 2,
+      isUrgent: false,
+      isDay20: false,
+    },
+    {
+      id: 3,
+      title: 'Tarjeta de Crédito (Corte día 20)',
+      amount: '3500.00',
+      currency: 'HNL',
+      amountInHnl: 3500.0,
+      formattedAmount: 'L. 3,500.00',
+      equivalentAmount: '~$140.00 USD',
+      formattedDate: 'Día 20',
+      isPaid: false,
+      daysRemaining: 5,
       isUrgent: false,
       isDay20: true,
     },
   ];
 }
 
-const overallPercentage = totalBudget > 0 ? Math.min(Math.round((totalSpent / totalBudget) * 100), 100) : 0;
-const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+const overallPercentage = totalBudgetHnl > 0 ? Math.min(Math.round((totalSpentHnl / totalBudgetHnl) * 100), 100) : 0;
+const currentMonthName = new Date().toLocaleDateString('es-HN', { month: 'long', year: 'numeric' });
+const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
 ---
 
-<Layout title="Dashboard de Gastos">
+<Layout title="Dashboard de Gastos en Lempiras y Dólares">
   <!-- Banner Informativo de Conexión a Base de Datos -->
   {!dbConfigured && (
     <div class="alert alert-warning shadow-lg mb-6 text-sm">
@@ -178,24 +226,32 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
       <div>
-        <p class="font-bold">Modo de Demostración</p>
-        <p class="text-xs opacity-90">Configura <code class="badge badge-sm font-mono">DATABASE_URL</code> en <code class="badge badge-sm font-mono">.env</code> para conectar tu Neon PostgreSQL.</p>
+        <p class="font-bold">Modo de Demostración (Datos en Lempiras)</p>
+        <p class="text-xs opacity-90">Configura <code class="badge badge-sm font-mono">DATABASE_URL</code> en tu archivo <code class="badge badge-sm font-mono">.env</code> para conectar tu Neon PostgreSQL.</p>
       </div>
     </div>
   )}
 
-  <!-- 1. Tarjeta Resumen General del Mes -->
+  <!-- 1. Tarjeta Resumen General en Lempiras (con equivalente en USD) -->
   <section class="card bg-gradient-to-br from-primary to-emerald-800 text-primary-content shadow-xl mb-6 overflow-hidden">
     <div class="card-body p-5">
       <div class="flex justify-between items-start">
         <div>
-          <span class="text-xs uppercase tracking-wider font-semibold opacity-80">Presupuesto Mensual</span>
-          <h2 class="text-3xl font-black mt-0.5 tracking-tight">
-            ${totalSpent.toFixed(2)}
-            <span class="text-sm font-normal opacity-80">/ ${totalBudget.toFixed(2)}</span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs uppercase tracking-wider font-semibold opacity-85">Presupuesto Mensual</span>
+            <span class="badge badge-sm bg-black/20 text-white border-0 font-medium">1 USD = L. {USD_RATE.toFixed(2)}</span>
+          </div>
+          <h2 class="text-3xl font-black mt-1 tracking-tight">
+            L. {totalSpentHnl.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <span class="text-xs font-normal opacity-80 block sm:inline">
+              / L. {totalBudgetHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+            </span>
           </h2>
+          <p class="text-xs text-primary-content/80 mt-0.5">
+            Equivalente en Dólares: ${(totalSpentHnl / USD_RATE).toFixed(2)} / ${(totalBudgetHnl / USD_RATE).toFixed(2)} USD
+          </p>
         </div>
-        <div class="radial-progress bg-primary-content/10 text-primary-content text-xs font-bold" style={`--value:${overallPercentage}; --size:3rem; --thickness:4px;`} role="progressbar">
+        <div class="radial-progress bg-primary-content/10 text-primary-content text-xs font-bold shrink-0" style={`--value:${overallPercentage}; --size:3.2rem; --thickness:4px;`} role="progressbar">
           {overallPercentage}%
         </div>
       </div>
@@ -207,21 +263,21 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
         ></div>
       </div>
 
-      <div class="flex justify-between items-center text-xs opacity-85 mt-2">
-        <span>Disponible: ${(totalBudget - totalSpent).toFixed(2)}</span>
+      <div class="flex justify-between items-center text-xs opacity-90 mt-2 font-medium">
+        <span>Disponible: L. {totalRemainingHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
         <span class="capitalize">{currentMonthName}</span>
       </div>
     </div>
   </section>
 
-  <!-- 2. Comparativa: Gasto Actual vs Límite Mensual por Categoría -->
+  <!-- 2. Comparativa: Gasto vs Límite Mensual en Lempiras -->
   <section class="mb-6">
     <div class="flex justify-between items-center mb-3">
       <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
         <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
-        Límites por Categoría
+        Límites por Categoría (Lps)
       </h3>
       <span class="text-xs text-base-content/60 font-medium">{categoriesView.length} categorías</span>
     </div>
@@ -231,21 +287,26 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
         <div class="card bg-base-100 border border-base-200 shadow-sm p-3.5 hover:shadow-md transition-shadow">
           <div class="flex justify-between items-center mb-1.5">
             <span class="font-bold text-sm text-neutral">{cat.name}</span>
-            <span class={`badge badge-sm font-semibold ${cat.badgeColor}`}>
-              {cat.percentage}%
-            </span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-[11px] text-base-content/50 font-medium">
+                ~${(cat.currentSpentHnl / USD_RATE).toFixed(0)} / ${(cat.monthlyLimitHnl / USD_RATE).toFixed(0)} USD
+              </span>
+              <span class={`badge badge-sm font-semibold ${cat.badgeColor}`}>
+                {cat.percentage}%
+              </span>
+            </div>
           </div>
 
           <!-- Barra de Progreso DaisyUI -->
           <progress
             class={`progress ${cat.progressColor} w-full h-2.5`}
-            value={cat.currentSpent}
-            max={cat.monthlyLimit}
+            value={cat.currentSpentHnl}
+            max={cat.monthlyLimitHnl}
           ></progress>
 
           <div class="flex justify-between items-center text-xs mt-1.5 text-base-content/70">
-            <span>Gastado: <strong class="text-neutral font-semibold">${cat.currentSpent.toFixed(2)}</strong></span>
-            <span>Límite: <span class="font-medium">${cat.monthlyLimit.toFixed(2)}</span></span>
+            <span>Gastado: <strong class="text-neutral font-semibold">L. {cat.currentSpentHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</strong></span>
+            <span>Límite: <span class="font-medium">L. {cat.monthlyLimitHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span></span>
           </div>
 
           {cat.isExceeded && (
@@ -261,30 +322,54 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
     </div>
   </section>
 
-  <!-- 3. Formulario en el Cliente para Registrar Nuevo Gasto -->
+  <!-- 3. Formulario para Registrar Nuevo Gasto (Bimoneda: Lps o USD) -->
   <section class="card bg-base-100 border border-base-200 shadow-md mb-6">
     <div class="card-body p-5">
-      <h3 class="font-bold text-base text-neutral flex items-center gap-1.5 mb-2">
-        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-        </svg>
-        Registrar Nueva Transacción
-      </h3>
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Registrar Transacción
+        </h3>
+        <span class="badge badge-ghost badge-sm text-[11px]">Bimoneda</span>
+      </div>
 
-      <!-- Contenedor dinámico de alertas -->
+      <!-- Selector de Moneda (Tabs) -->
+      <div class="flex bg-base-200 p-1 rounded-xl mb-3 gap-1">
+        <button
+          type="button"
+          id="btn-currency-hnl"
+          class="btn btn-sm flex-1 font-bold btn-primary text-white normal-case shadow-sm"
+        >
+          🇭🇳 Lempiras (Lps)
+        </button>
+        <button
+          type="button"
+          id="btn-currency-usd"
+          class="btn btn-sm flex-1 font-bold btn-ghost text-neutral normal-case"
+        >
+          🇺🇸 Dólares ($ USD)
+        </button>
+      </div>
+
+      <!-- Alerta dinámica -->
       <div id="form-alert" class="hidden mb-3"></div>
 
       <form id="transaction-form" class="space-y-3">
+        <input type="hidden" id="selected_currency" name="currency" value="HNL" />
+        <input type="hidden" id="exchange_rate" name="exchange_rate" value={USD_RATE} />
+
         <!-- Selector de Categoría -->
         <div class="form-control">
           <label class="label py-1">
             <span class="label-text text-xs font-semibold">Categoría</span>
           </label>
-          <select id="category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100">
+          <select id="category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100 font-medium">
             <option value="" disabled selected>Selecciona una categoría...</option>
             {categoriesView.map((c) => (
               <option value={c.id}>
-                {c.name} (Límite: ${c.monthlyLimit.toFixed(2)})
+                {c.name} (Límite: L. {c.monthlyLimitHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })})
               </option>
             ))}
           </select>
@@ -292,11 +377,16 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
 
         <!-- Monto -->
         <div class="form-control">
-          <label class="label py-1">
-            <span class="label-text text-xs font-semibold">Monto ($)</span>
-          </label>
+          <div class="flex justify-between items-center py-1">
+            <label class="label-text text-xs font-semibold">Monto</label>
+            <span id="currency-indicator" class="text-[11px] text-base-content/60 font-medium">
+              Moneda: Lempiras (L.)
+            </span>
+          </div>
           <div class="relative">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-base-content/50">$</span>
+            <span id="currency-prefix" class="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-primary">
+              L.
+            </span>
             <input
               type="number"
               id="amount"
@@ -305,8 +395,14 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
               min="0.01"
               placeholder="0.00"
               required
-              class="input input-bordered input-sm w-full pl-7 font-bold text-neutral"
+              class="input input-bordered input-sm w-full pl-8 font-bold text-neutral"
             />
+          </div>
+          <!-- Vista previa de conversión en tiempo real -->
+          <div id="conversion-preview" class="text-xs text-base-content/70 mt-1 font-medium hidden">
+            <span>Conversión estimada: </span>
+            <strong id="conversion-text" class="text-primary font-bold">L. 0.00</strong>
+            <span class="text-[10px] text-base-content/50 ml-1">(1 USD = L. {USD_RATE.toFixed(2)})</span>
           </div>
         </div>
 
@@ -319,7 +415,7 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
             type="text"
             id="description"
             name="description"
-            placeholder="Ej. Supermercado semanal, Gasolina..."
+            placeholder="Ej. Supermercado, Gasolina, Netflix..."
             class="input input-bordered input-sm w-full"
           />
         </div>
@@ -337,7 +433,7 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
     </div>
   </section>
 
-  <!-- 4. Próximos Pagos Programados -->
+  <!-- 4. Próximos Pagos Programados (Lps & USD) -->
   <section class="mb-4">
     <div class="flex justify-between items-center mb-3">
       <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
@@ -371,6 +467,11 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
                       Día 20
                     </span>
                   )}
+                  {payment.currency === 'USD' && (
+                    <span class="badge badge-info badge-outline badge-xs font-semibold">
+                      USD
+                    </span>
+                  )}
                 </h4>
                 <p class="text-xs text-base-content/60 mt-0.5">
                   {payment.formattedDate}
@@ -384,8 +485,12 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
             </div>
 
             <div class="text-right">
-              <span class="font-black text-sm text-neutral block">${payment.amount}</span>
-              <span class="badge badge-ghost badge-xs text-base-content/60">Pendiente</span>
+              <span class="font-black text-sm text-neutral block">
+                {payment.formattedAmount}
+              </span>
+              <span class="text-[11px] text-base-content/50 block font-medium">
+                {payment.equivalentAmount}
+              </span>
             </div>
           </div>
         ))}
@@ -395,6 +500,56 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
 </Layout>
 
 <script>
+  const USD_EXCHANGE_RATE = 25.00;
+
+  // Elementos del selector de moneda
+  const btnHnl = document.getElementById('btn-currency-hnl') as HTMLButtonElement;
+  const btnUsd = document.getElementById('btn-currency-usd') as HTMLButtonElement;
+  const selectedCurrencyInput = document.getElementById('selected_currency') as HTMLInputElement;
+  const currencyPrefix = document.getElementById('currency-prefix') as HTMLSpanElement;
+  const currencyIndicator = document.getElementById('currency-indicator') as HTMLSpanElement;
+  const amountInput = document.getElementById('amount') as HTMLInputElement;
+  const conversionPreview = document.getElementById('conversion-preview') as HTMLDivElement;
+  const conversionText = document.getElementById('conversion-text') as HTMLSpanElement;
+
+  function updateCurrency(curr: 'HNL' | 'USD') {
+    selectedCurrencyInput.value = curr;
+    if (curr === 'HNL') {
+      btnHnl.className = 'btn btn-sm flex-1 font-bold btn-primary text-white normal-case shadow-sm';
+      btnUsd.className = 'btn btn-sm flex-1 font-bold btn-ghost text-neutral normal-case';
+      currencyPrefix.textContent = 'L.';
+      currencyIndicator.textContent = 'Moneda: Lempiras (L.)';
+    } else {
+      btnUsd.className = 'btn btn-sm flex-1 font-bold btn-primary text-white normal-case shadow-sm';
+      btnHnl.className = 'btn btn-sm flex-1 font-bold btn-ghost text-neutral normal-case';
+      currencyPrefix.textContent = '$';
+      currencyIndicator.textContent = 'Moneda: Dólares ($ USD)';
+    }
+    updateConversion();
+  }
+
+  function updateConversion() {
+    const val = parseFloat(amountInput.value);
+    if (isNaN(val) || val <= 0) {
+      conversionPreview.classList.add('hidden');
+      return;
+    }
+
+    conversionPreview.classList.remove('hidden');
+    if (selectedCurrencyInput.value === 'USD') {
+      const hnl = (val * USD_EXCHANGE_RATE).toFixed(2);
+      conversionText.textContent = `L. ${hnl}`;
+    } else {
+      const usd = (val / USD_EXCHANGE_RATE).toFixed(2);
+      conversionText.textContent = `$${usd} USD`;
+    }
+  }
+
+  btnHnl?.addEventListener('click', () => updateCurrency('HNL'));
+  btnUsd?.addEventListener('click', () => updateCurrency('USD'));
+  amountInput?.addEventListener('input', updateConversion);
+
+  // Manejo del formulario de envío
   const form = document.getElementById('transaction-form') as HTMLFormElement;
   const alertBox = document.getElementById('form-alert') as HTMLDivElement;
   const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
@@ -421,6 +576,7 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
     const categoryId = (document.getElementById('category_id') as HTMLSelectElement).value;
     const amount = (document.getElementById('amount') as HTMLInputElement).value;
     const description = (document.getElementById('description') as HTMLInputElement).value;
+    const currency = selectedCurrencyInput.value;
 
     submitBtn.disabled = true;
     btnText.textContent = 'Verificando límite...';
@@ -433,6 +589,8 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
         body: JSON.stringify({
           category_id: categoryId,
           amount: parseFloat(amount),
+          currency,
+          exchange_rate: USD_EXCHANGE_RATE,
           description,
         }),
       });
@@ -442,12 +600,14 @@ const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long',
       if (!response.ok) {
         let msg = result.error || 'No fue posible registrar el gasto.';
         if (result.details) {
-          msg += `<br/><span class="text-[11px] opacity-90 mt-1 block">Límite: $${result.details.monthlyLimit} | Gastado: $${result.details.currentSpent} | Exceso: $${result.details.exceededBy}</span>`;
+          msg += `<br/><span class="text-[11px] opacity-90 mt-1 block">Límite: ${result.details.monthlyLimit} | Gastado: ${result.details.currentSpent} | Intentado: ${result.details.attemptedAmount} | Exceso: ${result.details.exceededBy}</span>`;
         }
         showAlert(msg, 'error');
       } else {
-        showAlert(`¡Gasto registrado con éxito! Saldo restante: $${result.summary?.remainingBudget || ''}`, 'success');
+        const remaining = result.summary?.remainingBudgetHnl ? `L. ${result.summary.remainingBudgetHnl}` : '';
+        showAlert(`¡Gasto registrado con éxito! Saldo disponible restante: ${remaining}`, 'success');
         form.reset();
+        updateCurrency('HNL');
         setTimeout(() => {
           window.location.reload();
         }, 1200);

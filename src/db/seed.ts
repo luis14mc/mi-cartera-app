@@ -16,25 +16,25 @@ const sql = neon(connectionString);
 const db = drizzle(sql, { schema });
 
 async function seed() {
-  console.log('🌱 Iniciando la siembra de datos de prueba...');
+  console.log('🌱 Iniciando la siembra de datos de prueba en Lempiras (HNL) y Dólares (USD)...');
 
   try {
-    // 1. Categorías iniciales
-    console.log('Insertando categorías...');
+    // 1. Categorías con límites en Lempiras
+    console.log('Insertando categorías en Lempiras...');
     const insertedCategories = await db
       .insert(schema.categories)
       .values([
-        { name: 'Alimentación y Supermercado', monthly_limit: '400.00' },
-        { name: 'Transporte y Gasolina', monthly_limit: '150.00' },
-        { name: 'Servicios Básicos (Luz, Agua, Net)', monthly_limit: '180.00' },
-        { name: 'Ocio y Restaurantes', monthly_limit: '100.00' },
-        { name: 'Salud y Farmacia', monthly_limit: '120.00' },
+        { name: 'Supermercado y Alimentación', monthly_limit: '9000.00' },
+        { name: 'Transporte y Combustible', monthly_limit: '3500.00' },
+        { name: 'Servicios del Hogar (Luz, Agua, Net)', monthly_limit: '3200.00' },
+        { name: 'Salidas, Cafés y Ocio', monthly_limit: '2500.00' },
+        { name: 'Salud y Farmacia', monthly_limit: '1800.00' },
       ])
       .returning();
 
     console.log(`✅ ${insertedCategories.length} categorías creadas.`);
 
-    // 2. Pagos programados próximos
+    // 2. Pagos programados en Lps y USD
     console.log('Insertando pagos programados...');
     const now = new Date();
     const inTwoDays = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
@@ -47,20 +47,23 @@ async function seed() {
       .insert(schema.scheduled_payments)
       .values([
         {
-          title: 'Servicio de Internet Fibra',
-          amount: '45.00',
+          title: 'Internet Fibra Claro/Tigo',
+          amount: '950.00',
+          currency: 'HNL',
           due_date: inOneDay,
           is_paid: false,
         },
         {
-          title: 'Membresía Gimnasio',
-          amount: '35.00',
+          title: 'Suscripción Software/Streaming (USD)',
+          amount: '22.99',
+          currency: 'USD',
           due_date: inTwoDays,
           is_paid: false,
         },
         {
           title: 'Pago Cuota Tarjeta (Corte día 20)',
-          amount: '120.00',
+          amount: '3500.00',
+          currency: 'HNL',
           due_date: day20,
           is_paid: false,
         },

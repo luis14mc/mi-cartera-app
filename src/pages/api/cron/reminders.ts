@@ -4,9 +4,10 @@ import { eq, and, gte, lte, asc } from 'drizzle-orm';
 
 export const prerender = false;
 
+const USD_RATE = 25.00; // Tasa de conversión de referencia Lps / USD
+
 export const GET: APIRoute = async ({ request }) => {
   try {
-    // Validación opcional de seguridad con CRON_SECRET de Vercel
     const authHeader = request.headers.get('authorization');
     if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return new Response(JSON.stringify({ error: 'No autorizado.' }), {
@@ -16,12 +17,9 @@ export const GET: APIRoute = async ({ request }) => {
     }
 
     const now = new Date();
-    // Inicio del día actual
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    // Ventana de 3 días completos hacia adelante
     const endOfThirdDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3, 23, 59, 59, 999);
 
-    // Consultar pagos pendientes entre hoy y los próximos 3 días (is_paid = false)
     const upcomingPayments = await db
       .select()
       .from(schema.scheduled_payments)
@@ -34,36 +32,50 @@ export const GET: APIRoute = async ({ request }) => {
       )
       .orderBy(asc(schema.scheduled_payments.due_date));
 
-    // Mapear alertas detalladas
     const alerts = upcomingPayments.map((payment) => {
       const paymentDate = new Date(payment.due_date);
       const diffTime = paymentDate.getTime() - now.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       const isDay20 = paymentDate.getDate() === 20;
+      const currency = payment.currency || 'HNL';
+      const rawAmount = parseFloat(payment.amount);
+
+      let formattedAmount = '';
+      let amountInHnl = rawAmount;
+
+      if (currency === 'USD') {
+        amountInHnl = rawAmount * USD_RATE;
+        formattedAmount = `$${rawAmount.toFixed(2)} USD (~L. ${amountInHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })})`;
+      } else {
+        formattedAmount = `L. ${rawAmount.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`;
+      }
 
       let urgency: 'HOY' | 'URGENTE' | 'PRÓXIMO' = 'PRÓXIMO';
       let message = '';
 
       if (diffDays <= 0) {
         urgency = 'HOY';
-        message = `🚨 ¡URGENTE! El pago de "${payment.title}" por $${payment.amount} vence HOY (${paymentDate.toLocaleDateString('es-ES')}).`;
+        message = `🚨 ¡URGENTE! El pago de "${payment.title}" por ${formattedAmount} vence HOY (${paymentDate.toLocaleDateString('es-HN')}).`;
       } else if (diffDays === 1) {
         urgency = 'URGENTE';
-        message = `⚠️ El pago de "${payment.title}" por $${payment.amount} vence MAÑANA.`;
+        message = `⚠️ El pago de "${payment.title}" por ${formattedAmount} vence MAÑANA.`;
       } else {
-        message = `📅 Recordatorio: "${payment.title}" ($${payment.amount}) vence en ${diffDays} días (${paymentDate.toLocaleDateString('es-ES')}).`;
+        message = `📅 Recordatorio: "${payment.title}" (${formattedAmount}) vence en ${diffDays} días (${paymentDate.toLocaleDateString('es-HN')}).`;
       }
 
       if (isDay20) {
-        message += ' [Corte / Pago del día 20]';
+        message += ' [Fecha de corte día 20]';
       }
 
       return {
         id: payment.id,
         title: payment.title,
-        amount: payment.amount,
+        amount: rawAmount.toFixed(2),
+        currency,
+        amountInHnl: amountInHnl.toFixed(2),
+        formattedAmount,
         dueDate: paymentDate.toISOString(),
-        formattedDate: paymentDate.toLocaleDateString('es-ES', {
+        formattedDate: paymentDate.toLocaleDateString('es-HN', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
@@ -80,6 +92,7 @@ export const GET: APIRoute = async ({ request }) => {
       JSON.stringify({
         success: true,
         executionTime: now.toISOString(),
+        exchangeRateUsed: `1 USD = ${USD_RATE.toFixed(2)} HNL`,
         totalPendingAlerts: alerts.length,
         window: {
           from: startOfToday.toISOString(),

@@ -4,13 +4,18 @@ import { eq, and, gte, lte, desc } from 'drizzle-orm';
 
 export const prerender = false;
 
+const DEFAULT_USD_RATE = 25.00; // 1 USD = 25.00 Lempiras (Tasa de referencia bancaria HN)
+
 // GET: Obtener transacciones recientes y resumen mensual
 export const GET: APIRoute = async () => {
   try {
     const allTransactions = await db
       .select({
         id: schema.transactions.id,
-        amount: schema.transactions.amount,
+        amount: schema.transactions.amount, // En Lempiras
+        currency: schema.transactions.currency,
+        originalAmount: schema.transactions.original_amount,
+        exchangeRate: schema.transactions.exchange_rate,
         description: schema.transactions.description,
         date: schema.transactions.date,
         categoryId: schema.transactions.category_id,
@@ -22,7 +27,7 @@ export const GET: APIRoute = async () => {
         eq(schema.transactions.category_id, schema.categories.id)
       )
       .orderBy(desc(schema.transactions.date))
-      .limit(20);
+      .limit(30);
 
     return new Response(JSON.stringify({ success: true, data: allTransactions }), {
       status: 200,
@@ -36,14 +41,16 @@ export const GET: APIRoute = async () => {
   }
 };
 
-// POST: Registrar nuevo gasto con validación de límite mensual
+// POST: Registrar nuevo gasto con validación en Lempiras y soporte de Dólares
 export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json();
-    const { amount, category_id, description, date } = body;
+    const { amount, currency = 'HNL', exchange_rate, category_id, description, date } = body;
 
     const parsedAmount = Number(amount);
     const parsedCategoryId = Number(category_id);
+    const selectedCurrency = currency === 'USD' ? 'USD' : 'HNL';
+    const rate = selectedCurrency === 'USD' ? Number(exchange_rate) || DEFAULT_USD_RATE : 1.0;
 
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       return new Response(
@@ -59,7 +66,7 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 1. Obtener la categoría y su límite mensual
+    // 1. Obtener la categoría y su límite mensual en Lempiras
     const [category] = await db
       .select()
       .from(schema.categories)
@@ -73,6 +80,9 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
+    // Convertir el gasto a Lempiras (HNL) para validación presupuestaria
+    const amountInHnl = selectedCurrency === 'USD' ? parsedAmount * rate : parsedAmount;
+
     const transactionDate = date ? new Date(date) : new Date();
     const currentYear = transactionDate.getFullYear();
     const currentMonth = transactionDate.getMonth();
@@ -80,7 +90,7 @@ export const POST: APIRoute = async ({ request }) => {
     const startOfMonth = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
     const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
 
-    // 2. Sumar las transacciones del mes actual de esa categoría
+    // 2. Sumar las transacciones del mes actual de esa categoría (en Lempiras)
     const monthlyTransactions = await db
       .select({ amount: schema.transactions.amount })
       .from(schema.transactions)
@@ -92,27 +102,29 @@ export const POST: APIRoute = async ({ request }) => {
         )
       );
 
-    const currentSpent = monthlyTransactions.reduce(
+    const currentSpentHnl = monthlyTransactions.reduce(
       (sum, item) => sum + parseFloat(item.amount),
       0
     );
 
-    const monthlyLimit = parseFloat(category.monthly_limit);
-    const projectedTotal = currentSpent + parsedAmount;
+    const monthlyLimitHnl = parseFloat(category.monthly_limit);
+    const projectedTotalHnl = currentSpentHnl + amountInHnl;
 
-    // 3. Validar si el nuevo gasto supera el monthly_limit
-    if (projectedTotal > monthlyLimit) {
-      const excess = (projectedTotal - monthlyLimit).toFixed(2);
+    // 3. Validar si el nuevo gasto supera el monthly_limit en Lempiras
+    if (projectedTotalHnl > monthlyLimitHnl) {
+      const excessHnl = (projectedTotalHnl - monthlyLimitHnl).toFixed(2);
       return new Response(
         JSON.stringify({
           error: `Gasto rechazado: este registro excede el límite mensual de la categoría "${category.name}".`,
           details: {
             categoryName: category.name,
-            monthlyLimit: monthlyLimit.toFixed(2),
-            currentSpent: currentSpent.toFixed(2),
-            attemptedAmount: parsedAmount.toFixed(2),
-            projectedTotal: projectedTotal.toFixed(2),
-            exceededBy: excess,
+            monthlyLimit: `L. ${monthlyLimitHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`,
+            currentSpent: `L. ${currentSpentHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`,
+            attemptedAmount: selectedCurrency === 'USD'
+              ? `$${parsedAmount.toFixed(2)} USD (aprox. L. ${amountInHnl.toFixed(2)})`
+              : `L. ${parsedAmount.toFixed(2)}`,
+            projectedTotal: `L. ${projectedTotalHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`,
+            exceededBy: `L. ${excessHnl}`,
           },
         }),
         {
@@ -122,11 +134,14 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 4. Si no supera el límite, registrar la transacción
+    // 4. Registrar la transacción (almacenando el equivalente en Lps y la moneda original)
     const [newTransaction] = await db
       .insert(schema.transactions)
       .values({
-        amount: parsedAmount.toFixed(2),
+        amount: amountInHnl.toFixed(2), // Consolidado en Lempiras
+        currency: selectedCurrency,
+        original_amount: parsedAmount.toFixed(2),
+        exchange_rate: rate.toFixed(4),
         category_id: parsedCategoryId,
         description: description ? String(description).trim() : null,
         date: transactionDate,
@@ -140,9 +155,12 @@ export const POST: APIRoute = async ({ request }) => {
         data: newTransaction,
         summary: {
           categoryName: category.name,
-          monthlyLimit: monthlyLimit.toFixed(2),
-          newTotalSpent: projectedTotal.toFixed(2),
-          remainingBudget: (monthlyLimit - projectedTotal).toFixed(2),
+          currency: selectedCurrency,
+          originalAmount: parsedAmount.toFixed(2),
+          amountInHnl: amountInHnl.toFixed(2),
+          monthlyLimitHnl: monthlyLimitHnl.toFixed(2),
+          newTotalSpentHnl: projectedTotalHnl.toFixed(2),
+          remainingBudgetHnl: (monthlyLimitHnl - projectedTotalHnl).toFixed(2),
         },
       }),
       {
