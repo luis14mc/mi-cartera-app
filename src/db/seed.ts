@@ -20,11 +20,12 @@ async function seed() {
 
   try {
     // 0. Asegurar esquema de base de datos
-    console.log('Verificando columna payment_method en transactions...');
+    console.log('Verificando columnas en base de datos...');
     await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_method varchar(30) NOT NULL DEFAULT 'DEBITO_EFECTIVO';`;
+    await sql`ALTER TABLE categories ADD COLUMN IF NOT EXISTS payment_method_default varchar(30) DEFAULT 'DEBITO_EFECTIVO';`;
 
-    // 1. Categorías del Modo Supervivencia (Octubre)
-    console.log('Sembrando categorías de Modo Supervivencia...');
+    // 1. Categorías del Modo Supervivencia y Compromisos Intocables (Octubre)
+    console.log('Sembrando categorías con Compromisos Intocables...');
     
     // Limpiar o actualizar categorías
     await db.delete(schema.transactions);
@@ -34,30 +35,48 @@ async function seed() {
     const insertedCategories = await db
       .insert(schema.categories)
       .values([
+        // Gastos Variables Controlados
         {
           name: 'Supermercado',
           monthly_limit: '4000.00',
           icon: '🛒',
+          payment_method_default: 'DEBITO_EFECTIVO',
         },
         {
           name: 'Gasolina',
           monthly_limit: '2000.00',
           icon: '⛽',
+          payment_method_default: 'DEBITO_EFECTIVO',
         },
         {
           name: 'Ocio y Hormiga',
           monthly_limit: '1500.00',
           icon: '🐜',
+          payment_method_default: 'DEBITO_EFECTIVO',
         },
         {
           name: 'Software (Vital)',
           monthly_limit: '1500.00',
           icon: '💻',
+          payment_method_default: 'DEBITO_EFECTIVO',
+        },
+        // Compromisos Intocables (L. 8,750 Congelados)
+        {
+          name: 'Maestría',
+          monthly_limit: '4350.00',
+          icon: '🎓',
+          payment_method_default: 'DEBITO',
+        },
+        {
+          name: 'Deudas/Préstamos Fijos',
+          monthly_limit: '4400.00',
+          icon: '🏦',
+          payment_method_default: 'DEBITO',
         },
       ])
       .returning();
 
-    console.log(`✅ ${insertedCategories.length} categorías de Supervivencia creadas.`);
+    console.log(`✅ ${insertedCategories.length} categorías creadas (incluyendo Compromisos Intocables).`);
 
     // 2. Compromiso fijo obligatorio (Día 20)
     console.log('Creando compromiso fijo de deuda (Día 20)...');

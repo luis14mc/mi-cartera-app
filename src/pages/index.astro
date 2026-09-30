@@ -5,9 +5,9 @@ import { eq, and, gte, lte, desc } from 'drizzle-orm';
 
 export const prerender = false;
 
-// Parámetros financieros del MODO RESCATE / SUPERVIVENCIA (Octubre)
+// Parámetros financieros del MODO SUPERVIVENCIA (Octubre)
 const MONTHLY_SALARY = 26518.0;
-const FIXED_DEBT_AMOUNT = 4400.0;
+const UNTOUCHABLE_COMMITMENTS_TOTAL = 8750.0; // Maestría (4,350) + Deudas Fijas (4,400)
 const DEBT_DUE_DAY = 20;
 
 // Lógica de detección de fecha para Alerta Proactiva (Días 17 al 20)
@@ -15,7 +15,7 @@ const now = new Date();
 const currentDay = now.getDate();
 const isDebtAlertActive = currentDay >= 17 && currentDay <= DEBT_DUE_DAY;
 
-interface CategoryCard {
+interface CategoryItem {
   id: number;
   name: string;
   monthlyLimit: number;
@@ -27,12 +27,16 @@ interface CategoryCard {
   icon: string;
   isOcioDanger: boolean;
   isHardStopTriggered: boolean;
+  isUntouchable: boolean;
+  isPaid: boolean;
 }
 
 let dbConfigured = true;
-let categoriesList: CategoryCard[] = [];
-let totalSpent = 0;
-let totalBudget = 0;
+let untouchableCommitments: CategoryItem[] = [];
+let variableCategories: CategoryItem[] = [];
+let totalVariableSpent = 0;
+let totalUntouchableSpent = 0;
+let allCategories: CategoryItem[] = [];
 let recentTransactions: Array<{
   id: number;
   amount: string;
@@ -67,10 +71,12 @@ try {
     const remaining = Math.max(0, limit - spent);
     const percentage = limit > 0 ? Math.min(Math.round((spent / limit) * 100), 100) : 0;
 
-    const isOcio =
-      cat.name.toLowerCase().includes('ocio') || cat.name.toLowerCase().includes('hormiga');
+    const lowerName = cat.name.toLowerCase();
+    const isUntouchable =
+      lowerName.includes('maestr') || lowerName.includes('deuda') || lowerName.includes('préstamo');
+    const isOcio = lowerName.includes('ocio') || lowerName.includes('hormiga');
 
-    // Regla de Negocio: En "Ocio y Hormiga", si el gasto supera L. 1,000 se vuelve ROJO inmediatamente
+    // Regla de Negocio: En "Ocio y Hormiga", si supera L. 1,000 se vuelve ROJO inmediatamente
     let progressClass = 'progress-success';
     let badgeClass = 'badge-success text-success-content font-bold';
     const isOcioDanger = isOcio && spent > 1000;
@@ -83,7 +89,7 @@ try {
       badgeClass = 'badge-warning text-warning-content font-bold';
     }
 
-    categoriesList.push({
+    const item: CategoryItem = {
       id: cat.id,
       name: cat.name,
       monthlyLimit: limit,
@@ -94,12 +100,24 @@ try {
       badgeClass,
       icon: cat.icon || '📌',
       isOcioDanger,
-      isHardStopTriggered: spent >= limit,
-    });
+      isHardStopTriggered: !isUntouchable && spent >= limit,
+      isUntouchable,
+      isPaid: isUntouchable && spent >= limit,
+    };
 
-    totalBudget += limit;
-    totalSpent += spent;
+    allCategories.push(item);
+
+    if (isUntouchable) {
+      untouchableCommitments.push(item);
+      totalUntouchableSpent += spent;
+    } else {
+      variableCategories.push(item);
+      totalVariableSpent += spent;
+    }
   }
+
+  // Ordenar compromisos intocables: Maestría primero, luego Deudas
+  untouchableCommitments.sort((a, b) => (a.name.toLowerCase().includes('maestr') ? -1 : 1));
 
   // 2. Transacciones recientes
   const rawTransactions = await db
@@ -131,8 +149,41 @@ try {
   }));
 } catch (error) {
   dbConfigured = false;
-  // Fallback con categorías del Modo Supervivencia de Luis
-  categoriesList = [
+  // Fallback con datos locales si la BD no responde
+  untouchableCommitments = [
+    {
+      id: 5,
+      name: 'Maestría',
+      monthlyLimit: 4350.0,
+      currentSpent: 0.0,
+      remaining: 4350.0,
+      percentage: 0,
+      progressClass: '',
+      badgeClass: '',
+      icon: '🎓',
+      isOcioDanger: false,
+      isHardStopTriggered: false,
+      isUntouchable: true,
+      isPaid: false,
+    },
+    {
+      id: 6,
+      name: 'Deudas/Préstamos Fijos',
+      monthlyLimit: 4400.0,
+      currentSpent: 0.0,
+      remaining: 4400.0,
+      percentage: 0,
+      progressClass: '',
+      badgeClass: '',
+      icon: '🏦',
+      isOcioDanger: false,
+      isHardStopTriggered: false,
+      isUntouchable: true,
+      isPaid: false,
+    },
+  ];
+
+  variableCategories = [
     {
       id: 1,
       name: 'Supermercado',
@@ -145,6 +196,8 @@ try {
       icon: '🛒',
       isOcioDanger: false,
       isHardStopTriggered: false,
+      isUntouchable: false,
+      isPaid: false,
     },
     {
       id: 2,
@@ -158,6 +211,8 @@ try {
       icon: '⛽',
       isOcioDanger: false,
       isHardStopTriggered: false,
+      isUntouchable: false,
+      isPaid: false,
     },
     {
       id: 3,
@@ -171,6 +226,8 @@ try {
       icon: '🐜',
       isOcioDanger: false,
       isHardStopTriggered: false,
+      isUntouchable: false,
+      isPaid: false,
     },
     {
       id: 4,
@@ -184,14 +241,24 @@ try {
       icon: '💻',
       isOcioDanger: false,
       isHardStopTriggered: false,
+      isUntouchable: false,
+      isPaid: false,
     },
   ];
-  totalBudget = 9000.0;
-  totalSpent = 0.0;
+
+  allCategories = [...untouchableCommitments, ...variableCategories];
+  totalVariableSpent = 0.0;
+  totalUntouchableSpent = 0.0;
 }
 
 const currentMonthLabel = 'Octubre 2026';
-const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
+
+// 🛑 MATEMÁTICA ESTRICTA DE LIQUIDEZ REAL:
+// Los L. 8,750 (Maestría 4,350 + Deuda 4,400) se restan automáticamente desde el día 1.
+// La liquidez restante real del usuario parte de L. 17,768.00 y se reduce con cada gasto variable.
+const initialRealLiquidity = MONTHLY_SALARY - UNTOUCHABLE_COMMITMENTS_TOTAL;
+const disposableSalary = initialRealLiquidity - totalVariableSpent;
+const totalSpentAll = totalVariableSpent + totalUntouchableSpent;
 ---
 
 <Layout title="CRONOS - MODO RESCATE (OCTUBRE)">
@@ -206,7 +273,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
         <span class="badge badge-error text-error-content badge-xs font-black">SIN GRACIA</span>
       </div>
       <p class="text-[11px] font-bold leading-tight mt-0.5">
-        Has perdido el periodo de gracia en tus tarjetas este mes. Cualquier pago con crédito generará intereses inmediatos. <strong>Usa Débito o Efectivo</strong>.
+        Has perdido el periodo de gracia en tus tarjetas este mes. Todo cobro a crédito generará intereses inmediatos. <strong>Usa Débito o Efectivo</strong>.
       </p>
     </div>
   </div>
@@ -241,7 +308,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
             </p>
           </div>
         </div>
-        <span id="leaks-badge" class="badge badge-error text-error-content font-black text-[10px] py-2">
+        <span class="badge badge-error text-error-content font-black text-[10px] py-2">
           $54.98 / mes
         </span>
       </div>
@@ -304,7 +371,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
     </div>
   </section>
 
-  <!-- Tarjeta Resumen Financiero: Salario & Control Global -->
+  <!-- TARJETA RESUMEN FINANCIERO: SALARIO & CONTROL GLOBAL -->
   <section class="card bg-base-200 border border-base-300 shadow-2xl mb-5 text-base-content overflow-hidden">
     <div class="card-body p-4.5">
       <div class="flex justify-between items-start">
@@ -319,35 +386,138 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
         </div>
       </div>
 
-      <!-- Métricas Clave -->
+      <!-- Métricas Clave con deducción estricta de compromisos intocables -->
       <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-base-300 text-xs">
-        <div class="bg-base-300/60 p-2.5 rounded-xl border border-base-content/5">
-          <span class="text-base-content/60 block text-[10px] font-semibold">Deuda Fija (Día 20):</span>
-          <span class="font-extrabold text-warning">L. {FIXED_DEBT_AMOUNT.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
+        <div class="bg-base-300/80 p-2.5 rounded-xl border border-primary/20">
+          <div class="flex items-center justify-between">
+            <span class="text-base-content/70 block text-[10px] font-bold">Compromisos Fijos:</span>
+            <span class="badge badge-xs badge-neutral text-[9px] font-bold">Congelado</span>
+          </div>
+          <span class="font-black text-warning text-sm">
+            -L. {UNTOUCHABLE_COMMITMENTS_TOTAL.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+          </span>
+          <span class="text-[9px] text-base-content/50 block mt-0.5">Maestría + Deuda</span>
         </div>
-        <div class="bg-base-300/60 p-2.5 rounded-xl border border-base-content/5">
-          <span class="text-base-content/60 block text-[10px] font-semibold">Gastado en el Mes:</span>
-          <span class="font-extrabold text-error">L. {totalSpent.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
+        <div class="bg-base-300/80 p-2.5 rounded-xl border border-base-content/5">
+          <span class="text-base-content/70 block text-[10px] font-bold">Gastos Variables Mes:</span>
+          <span class="font-black text-error text-sm">
+            L. {totalVariableSpent.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+          </span>
+          <span class="text-[9px] text-base-content/50 block mt-0.5">Super, Gas, Ocio, Soft</span>
         </div>
       </div>
 
-      <div class="mt-2.5 text-center text-xs text-base-content/80 font-medium bg-primary/10 py-1.5 px-2 rounded-xl border border-primary/20">
-        Saldo Libre Estimado: <strong class="text-primary font-black">L. {disposableSalary.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</strong>
+      <!-- Saldo Restante Real Automático -->
+      <div class="mt-3 text-center text-xs py-2 px-3 rounded-xl border border-primary/30 bg-primary/10 flex flex-col gap-0.5">
+        <span class="text-[10px] uppercase font-bold text-base-content/70">
+          Liquidez Real Disponible (Te Quedan):
+        </span>
+        <strong class="text-primary font-black text-lg">
+          L. {disposableSalary.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+        </strong>
+        <span class="text-[9px] text-base-content/60">
+          (Salario L. 26,518 - L. 8,750 Fijos Congelados - L. {totalVariableSpent.toFixed(2)} Variables)
+        </span>
       </div>
     </div>
   </section>
 
-  <!-- Dashboard de Categorías con Barras de Progreso DaisyUI & Regla Ocio -->
+  <!-- 🔒 SECCIÓN COMPROMISOS INTOCABLES (MAESTRÍA Y DEUDAS FIJAS) -->
+  <section class="card bg-base-200 border-2 border-primary/50 shadow-2xl mb-5 overflow-hidden">
+    <div class="card-body p-4.5">
+      <div class="flex justify-between items-center mb-1">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🔒</span>
+          <div>
+            <h3 class="font-black text-sm uppercase tracking-wide text-primary">
+              Compromisos Intocables
+            </h3>
+            <p class="text-[10px] text-base-content/70 font-semibold">
+              L. 8,750.00 congelados al inicio de cada mes (Checklist Financiero)
+            </p>
+          </div>
+        </div>
+        <span class="badge badge-primary text-primary-content text-[10px] font-black py-1 px-2">
+          PRIORIDAD MÁXIMA
+        </span>
+      </div>
+
+      <div class="divider my-1"></div>
+
+      <!-- Tarjetas de Compromisos Intocables (Sin barra de colores, con Checklist/Botón de Pago) -->
+      <div class="space-y-3 mt-1">
+        {untouchableCommitments.map((cat) => (
+          <div
+            class={`card border p-3.5 rounded-2xl transition-all shadow-sm ${
+              cat.isPaid
+                ? 'bg-success/10 border-success/40 text-base-content'
+                : 'bg-base-100 border-base-content/15 hover:border-primary/50 text-base-content'
+            }`}
+          >
+            <div class="flex justify-between items-center gap-2">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">{cat.icon}</span>
+                <div>
+                  <h4 class="font-extrabold text-sm text-base-content leading-tight">
+                    {cat.name}
+                  </h4>
+                  <span class="text-xs font-black text-primary block mt-0.5">
+                    L. {cat.monthlyLimit.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Estado de Checklist Financiero: PAGADO vs Botón Registrar Pago -->
+              <div>
+                {cat.isPaid ? (
+                  <div class="flex items-center gap-1.5 bg-success/20 text-success border border-success/40 px-3 py-1.5 rounded-xl font-black text-xs shadow-sm">
+                    <span class="text-sm">✓</span>
+                    <span>PAGADO</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-sm text-primary-content font-black normal-case text-xs shadow-md btn-pay-commitment"
+                    data-cat-id={cat.id}
+                    data-cat-name={cat.name}
+                    data-cat-amount={cat.monthlyLimit}
+                  >
+                    <span>Registrar Pago</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <!-- Detalle informativo -->
+            <div class="mt-2 pt-2 border-t border-base-content/5 flex justify-between items-center text-[10px] text-base-content/60 font-medium">
+              <span>
+                {cat.isPaid
+                  ? `Completado este mes (L. ${cat.currentSpent.toFixed(2)})`
+                  : 'Pendiente de registrar en banco'}
+              </span>
+              <span class="badge badge-ghost badge-xs text-[9px] font-bold">
+                Débito Obligatorio
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD DE GASTOS VARIABLES CON BARRAS DE PROGRESO DAISYUI -->
   <section class="mb-6">
     <div class="flex justify-between items-center mb-3">
       <h3 class="font-extrabold text-sm text-base-content flex items-center gap-1.5 uppercase tracking-wide">
-        🛡️ Categorías & Bloqueos Duros
+        🛡️ Gastos Variables & Bloqueos Duros
       </h3>
-      <span class="text-[11px] text-base-content/60 font-semibold">{categoriesList.length} Categorías</span>
+      <span class="text-[11px] text-base-content/60 font-semibold">
+        {variableCategories.length} Categorías
+      </span>
     </div>
 
     <div class="space-y-3">
-      {categoriesList.map((cat) => (
+      {variableCategories.map((cat) => (
         <div class="card bg-base-200 border border-base-300 shadow-md p-3.5 hover:border-primary/40 transition-all">
           <div class="flex justify-between items-center mb-1.5">
             <div class="flex items-center gap-2">
@@ -366,8 +536,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
             </span>
           </div>
 
-          <!-- Barra de Progreso DaisyUI -->
-          <!-- Ocio > 1000 se vuelve ROJO obligatorio, al igual que > 85% -->
+          <!-- Barra de Progreso DaisyUI con regla Ocio > 1000 en ROJO -->
           <progress
             class={`progress ${cat.progressClass} w-full h-2.5 my-1.5`}
             value={cat.currentSpent}
@@ -510,11 +679,20 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
           </label>
           <select id="quick_category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100 text-base-content font-semibold">
             <option value="" disabled selected>Selecciona categoría...</option>
-            {categoriesList.map((c) => (
-              <option value={c.id}>
-                {c.icon} {c.name} (Disponible: L. {c.remaining.toFixed(2)})
-              </option>
-            ))}
+            <optgroup label="🔒 Compromisos Intocables">
+              {untouchableCommitments.map((c) => (
+                <option value={c.id}>
+                  {c.icon} {c.name} (L. {c.monthlyLimit.toFixed(2)})
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="🛡️ Gastos Variables">
+              {variableCategories.map((c) => (
+                <option value={c.id}>
+                  {c.icon} {c.name} (Disponible: L. {c.remaining.toFixed(2)})
+                </option>
+              ))}
+            </optgroup>
           </select>
         </div>
 
@@ -527,7 +705,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
             type="text"
             id="quick_description"
             name="description"
-            placeholder="Ej. Despensa, combustible, café..."
+            placeholder="Ej. Despensa, combustible, colegiatura..."
             class="input input-bordered input-sm w-full bg-base-100 text-base-content font-medium"
           />
         </div>
@@ -658,6 +836,53 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
     modalQuick.showModal();
     plasticRiskAccepted = false;
     setTimeout(() => amountInput?.focus(), 150);
+  });
+
+  // Botones de "Registrar Pago" de Compromisos Intocables (Un solo clic)
+  const payCommitmentBtns = document.querySelectorAll<HTMLButtonElement>('.btn-pay-commitment');
+  payCommitmentBtns.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const catId = parseInt(btn.dataset.catId || '0');
+      const catName = btn.dataset.catName || 'Compromiso Fijo';
+      const amount = parseFloat(btn.dataset.catAmount || '0');
+
+      if (!catId || isNaN(amount) || amount <= 0) return;
+
+      const confirmed = confirm(
+        `¿Confirmas el registro del pago de ${catName} por L. ${amount.toFixed(2)} (vía Débito/Efectivo)?`
+      );
+      if (!confirmed) return;
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="loading loading-spinner loading-xs"></span> Registrando...`;
+
+      try {
+        const response = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount,
+            category_id: catId,
+            description: `Pago mensual ${catName}`,
+            payment_method: 'DEBITO_EFECTIVO',
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          showDaisyToast(data.error || 'Error al registrar pago', true);
+          btn.disabled = false;
+          btn.textContent = 'Registrar Pago';
+        } else {
+          showDaisyToast(`¡${catName} registrado como PAGADO!`, false);
+          setTimeout(() => window.location.reload(), 1000);
+        }
+      } catch (err) {
+        showDaisyToast('Error de red al registrar pago.', true);
+        btn.disabled = false;
+        btn.textContent = 'Registrar Pago';
+      }
+    });
   });
 
   // Mostrar Toast Nativo de DaisyUI

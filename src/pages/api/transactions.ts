@@ -105,9 +105,15 @@ export const POST: APIRoute = async ({ request }) => {
     const monthlyLimit = parseFloat(category.monthly_limit);
     const projectedTotal = currentSpent + parsedAmount;
 
+    // Determinar si es compromiso intocable fijo predefinido
+    const isUntouchableCommitment =
+      category.name.toLowerCase().includes('maestr') ||
+      category.name.toLowerCase().includes('deuda') ||
+      category.name.toLowerCase().includes('préstamo');
+
     // 🛑 REGLA DE NEGOCIO CRÍTICA (Hard Stop):
-    // Si total_actual + nuevo_monto > monthly_limit, RECHAZAR con HTTP 400
-    if (projectedTotal > monthlyLimit) {
+    // No aplica Hard Stop para compromisos fijos predefinidos (Maestría y Deudas fijas)
+    if (!isUntouchableCommitment && projectedTotal > monthlyLimit) {
       const isOcio =
         category.name.toLowerCase().includes('ocio') ||
         category.name.toLowerCase().includes('hormiga');

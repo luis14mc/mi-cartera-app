@@ -7,6 +7,7 @@ export const categories = pgTable('categories', {
   name: varchar('name', { length: 100 }).notNull(),
   monthly_limit: numeric('monthly_limit', { precision: 12, scale: 2 }).notNull(),
   icon: varchar('icon', { length: 50 }).notNull().default('tag'),
+  payment_method_default: varchar('payment_method_default', { length: 30 }).default('DEBITO_EFECTIVO'),
 });
 
 // 2. Tabla de Transacciones para control de gastos
