@@ -295,6 +295,29 @@ const overallSpentPct = variableBudgetTotal > 0
       <span class="text-[11px] text-tertiary font-medium">Neon DB Synced</span>
     </div>
 
+    <!-- BANNER DE INSTALACIÓN PWA EN CELULAR -->
+    <div id="pwa-install-banner" class="rounded-2xl bg-surface-container-high border border-primary/30 p-3 flex items-center justify-between shadow-md transition-all">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined text-[20px]">install_mobile</span>
+        </div>
+        <div class="min-w-0">
+          <h4 class="font-bold text-xs text-on-surface font-headline leading-tight">
+            Instalar CRONOS en tu Celular
+          </h4>
+          <p class="text-[10px] text-on-surface-variant truncate">
+            Pantalla completa, rápido y sin navegador
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        class="btn-trigger-pwa-install text-xs font-bold text-on-primary bg-primary px-3.5 py-1.5 rounded-full hover:brightness-110 active:scale-95 transition-all shadow-sm shrink-0"
+      >
+        Instalar
+      </button>
+    </div>
+
     <!-- ALERTA DE RESCATE: PÉRDIDA DE PERIODO DE GRACIA -->
     <div class="rounded-2xl bg-surface-container-low p-3.5 border border-error/30 shadow-md flex items-start gap-3">
       <div class="w-8 h-8 rounded-full bg-error-container/30 text-error flex items-center justify-center shrink-0 mt-0.5">

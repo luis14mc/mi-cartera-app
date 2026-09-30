@@ -23,6 +23,13 @@ const { title } = Astro.props;
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CRONOS" />
     <meta name="application-name" content="Control CRONOS" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/favicon.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CRONOS" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Control CRONOS" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Google Fonts & Material Symbols (Canopy Nocturne Design System) -->
@@ -56,7 +63,18 @@ const { title } = Astro.props;
             <span class="text-[10px] text-primary font-semibold uppercase tracking-wider block mt-0.5">Modo Supervivencia</span>
           </div>
         </div>
-        <div class="flex-none gap-2">
+        <div class="flex-none flex items-center gap-1.5">
+          <!-- Botón de Instalación en Celular -->
+          <button
+            id="btn-header-install"
+            type="button"
+            class="btn-trigger-pwa-install flex items-center gap-1 bg-surface-container-high hover:bg-primary hover:text-on-primary text-secondary px-2.5 py-1 rounded-full text-xs font-semibold transition-all border border-outline-variant/20 shadow-sm"
+            title="Instalar en tu Celular"
+          >
+            <span class="material-symbols-outlined text-[17px]">install_mobile</span>
+            <span class="text-[11px] font-medium hidden sm:inline">Instalar</span>
+          </button>
+
           <!-- Avatar del Usuario -->
           <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xs shadow-sm">
             <span class="material-symbols-outlined text-[18px]">person</span>
@@ -84,23 +102,160 @@ const { title } = Astro.props;
             <span class="material-symbols-outlined text-[22px]">payments</span>
             <span class="text-[11px] font-medium tracking-tight">Pagos</span>
           </a>
-          <a href="#section-checklist" class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-1 text-on-surface-variant hover:text-on-surface transition-colors">
-            <span class="material-symbols-outlined text-[22px]">tune</span>
-            <span class="text-[11px] font-medium tracking-tight">Fugas</span>
-          </a>
+          <button type="button" class="btn-trigger-pwa-install flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-1 text-secondary hover:text-primary transition-colors">
+            <span class="material-symbols-outlined text-[22px]">install_mobile</span>
+            <span class="text-[11px] font-medium tracking-tight">Instalar</span>
+          </button>
         </div>
       </nav>
+
+      <!-- MODAL GUÍA DE INSTALACIÓN PWA -->
+      <dialog id="modal_pwa_install" class="modal modal-bottom sm:modal-middle">
+        <div class="modal-box p-5 bg-surface-container border border-outline-variant/30 text-on-surface max-w-md mx-auto shadow-2xl rounded-t-3xl sm:rounded-3xl">
+          <div class="flex justify-between items-center mb-3">
+            <div class="flex items-center gap-2">
+              <div class="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+                <span class="material-symbols-outlined text-[22px]">install_mobile</span>
+              </div>
+              <div>
+                <h3 class="font-bold text-base text-on-surface font-headline leading-tight">
+                  Instalar en tu Celular
+                </h3>
+                <span class="text-[10px] text-primary font-medium">Control CRONOS PWA</span>
+              </div>
+            </div>
+            <form method="dialog">
+              <button class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center hover:text-on-surface transition-colors">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </form>
+          </div>
+
+          <div class="space-y-3.5 my-2">
+            <!-- Caso 1: Android / Chrome con soporte nativo de instalación -->
+            <div id="pwa-android-section" class="flex flex-col gap-2">
+              <p class="text-xs text-on-surface-variant leading-relaxed">
+                Instala la app en tu pantalla de inicio para abrirla como una aplicación nativa, a pantalla completa y con acceso offline inmediato.
+              </p>
+              <button
+                type="button"
+                id="btn-pwa-native-install"
+                class="w-full h-12 rounded-full bg-primary text-on-primary font-bold text-xs flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_4px_16px_rgba(30,184,84,0.3)]"
+              >
+                <span class="material-symbols-outlined text-[20px]">download</span>
+                <span>Instalar Aplicación Ahora</span>
+              </button>
+            </div>
+
+            <!-- Caso 2: iOS Safari (Guía visual) -->
+            <div id="pwa-ios-section" class="bg-surface-container-low p-3.5 rounded-2xl border border-outline-variant/15 flex flex-col gap-2.5">
+              <span class="text-xs font-bold text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">phone_iphone</span>
+                En iPhone / iPad (Safari):
+              </span>
+              <div class="space-y-2 text-xs text-on-surface-variant">
+                <div class="flex items-start gap-2.5">
+                  <span class="w-5 h-5 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
+                  <p>Toca el botón <strong class="text-on-surface">Compartir</strong> (<span class="material-symbols-outlined text-[15px] inline align-middle text-secondary">ios_share</span>) en la barra inferior de Safari.</p>
+                </div>
+                <div class="flex items-start gap-2.5">
+                  <span class="w-5 h-5 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
+                  <p>Desliza hacia abajo y pulsa <strong class="text-on-surface">"Agregar a inicio"</strong> (<span class="material-symbols-outlined text-[15px] inline align-middle text-secondary">add_box</span>).</p>
+                </div>
+                <div class="flex items-start gap-2.5">
+                  <span class="w-5 h-5 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
+                  <p>Toca <strong class="text-primary font-bold">"Agregar"</strong> arriba a la derecha. ¡Listo!</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Caso 3: Ya instalada -->
+            <div id="pwa-installed-section" class="hidden bg-primary/10 border border-primary/30 p-3 rounded-2xl text-center">
+              <span class="text-xs font-bold text-primary flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined text-[18px]">verified</span>
+                ¡Ya estás usando la App instalada!
+              </span>
+            </div>
+          </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
 
       <!-- Toast Container Nativo DaisyUI -->
       <div id="toast-container" class="toast toast-top toast-center z-50 pointer-events-none w-full max-w-xs transition-all"></div>
     </div>
 
-    <!-- PWA Service Worker Registration -->
+    <!-- PWA Service Worker & Install Prompt Controller -->
     <script>
+      let deferredInstallPrompt: any = null;
+
+      const modalPwa = document.getElementById('modal_pwa_install') as HTMLDialogElement;
+      const btnNativeInstall = document.getElementById('btn-pwa-native-install') as HTMLButtonElement;
+      const androidSection = document.getElementById('pwa-android-section') as HTMLDivElement;
+      const iosSection = document.getElementById('pwa-ios-section') as HTMLDivElement;
+      const installedSection = document.getElementById('pwa-installed-section') as HTMLDivElement;
+
+      // Detectar si ya está en modo Standalone (App instalada)
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      const isIos = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+
+      if (isStandalone) {
+        androidSection?.classList.add('hidden');
+        iosSection?.classList.add('hidden');
+        installedSection?.classList.remove('hidden');
+      } else if (isIos) {
+        // En iOS Safari no existe beforeinstallprompt; mostrar directamente la guía de Safari
+        androidSection?.classList.add('hidden');
+        iosSection?.classList.remove('hidden');
+      }
+
+      // Escuchar evento de instalación PWA en navegadores compatibles (Android / Chrome / Edge)
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        if (!isStandalone) {
+          androidSection?.classList.remove('hidden');
+        }
+      });
+
+      // Manejar clic en botón nativo de instalación
+      btnNativeInstall?.addEventListener('click', async () => {
+        if (!deferredInstallPrompt) {
+          // Si no está el prompt listo, mostrar mensaje informativo
+          alert('Toca los tres puntos (⋮) de tu navegador y selecciona "Instalar aplicación" o "Agregar a la pantalla principal".');
+          return;
+        }
+
+        deferredInstallPrompt.prompt();
+        const { outcome } = await deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+          modalPwa?.close();
+        }
+        deferredInstallPrompt = null;
+      });
+
+      // Evento de instalación exitosa
+      window.addEventListener('appinstalled', () => {
+        modalPwa?.close();
+        androidSection?.classList.add('hidden');
+        iosSection?.classList.add('hidden');
+        installedSection?.classList.remove('hidden');
+      });
+
+      // Conectar todos los botones con clase .btn-trigger-pwa-install para abrir el modal
+      document.querySelectorAll('.btn-trigger-pwa-install').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          modalPwa?.showModal();
+        });
+      });
+
+      // Registro de Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.log('CRONOS ServiceWorker: Activo en modo build/producción', err);
+            console.log('CRONOS ServiceWorker: Activo', err);
           });
         });
       }

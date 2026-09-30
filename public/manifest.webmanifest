@@ -1,11 +1,13 @@
 {
-  "name": "Mi Cartera App",
-  "short_name": "MiCartera",
-  "description": "Gestión inteligente de finanzas personales, control de límites por categoría y pagos programados",
+  "id": "/",
+  "name": "Control CRONOS - Modo Supervivencia",
+  "short_name": "CRONOS",
+  "description": "PWA de disciplina financiera estricta y control de gastos en Lempiras y Dólares",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#10b981",
+  "background_color": "#171212",
+  "theme_color": "#181313",
   "orientation": "portrait",
   "icons": [
     {
