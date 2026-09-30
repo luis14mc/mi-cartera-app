@@ -19,40 +19,45 @@ async function seed() {
   console.log('⚡ Iniciando configuración inicial para Control CRONOS...');
 
   try {
-    // 1. Categorías con disciplina estricta anti-fugas
-    console.log('Creando categorías de presupuesto...');
+    // 0. Asegurar esquema de base de datos
+    console.log('Verificando columna payment_method en transactions...');
+    await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_method varchar(30) NOT NULL DEFAULT 'DEBITO_EFECTIVO';`;
+
+    // 1. Categorías del Modo Supervivencia (Octubre)
+    console.log('Sembrando categorías de Modo Supervivencia...');
+    
+    // Limpiar o actualizar categorías
+    await db.delete(schema.transactions);
+    await db.delete(schema.categories);
+    await db.delete(schema.scheduled_payments);
+
     const insertedCategories = await db
       .insert(schema.categories)
       .values([
         {
-          name: 'Suscripciones & Software',
-          monthly_limit: '1200.00',
-          icon: '💻',
+          name: 'Supermercado',
+          monthly_limit: '4000.00',
+          icon: '🛒',
         },
         {
-          name: 'Gastos Hormiga (Café/Snacks)',
+          name: 'Gasolina',
+          monthly_limit: '2000.00',
+          icon: '⛽',
+        },
+        {
+          name: 'Ocio y Hormiga',
           monthly_limit: '1500.00',
           icon: '🐜',
         },
         {
-          name: 'Básico y Supermercado',
-          monthly_limit: '7500.00',
-          icon: '🛒',
-        },
-        {
-          name: 'Transporte y Gasolina',
-          monthly_limit: '3000.00',
-          icon: '⛽',
-        },
-        {
-          name: 'Servicios del Hogar',
-          monthly_limit: '2500.00',
-          icon: '⚡',
+          name: 'Software (Vital)',
+          monthly_limit: '1500.00',
+          icon: '💻',
         },
       ])
       .returning();
 
-    console.log(`✅ ${insertedCategories.length} categorías creadas.`);
+    console.log(`✅ ${insertedCategories.length} categorías de Supervivencia creadas.`);
 
     // 2. Compromiso fijo obligatorio (Día 20)
     console.log('Creando compromiso fijo de deuda (Día 20)...');

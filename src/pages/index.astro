@@ -5,7 +5,7 @@ import { eq, and, gte, lte, desc } from 'drizzle-orm';
 
 export const prerender = false;
 
-// Parámetros financieros estrictos de Control CRONOS
+// Parámetros financieros del MODO RESCATE / SUPERVIVENCIA (Octubre)
 const MONTHLY_SALARY = 26518.0;
 const FIXED_DEBT_AMOUNT = 4400.0;
 const DEBT_DUE_DAY = 20;
@@ -25,7 +25,8 @@ interface CategoryCard {
   progressClass: string;
   badgeClass: string;
   icon: string;
-  isLeakWarning: boolean;
+  isOcioDanger: boolean;
+  isHardStopTriggered: boolean;
 }
 
 let dbConfigured = true;
@@ -36,6 +37,7 @@ let recentTransactions: Array<{
   id: number;
   amount: string;
   description: string;
+  paymentMethod: string;
   categoryName: string;
   icon: string;
   formattedDate: string;
@@ -65,20 +67,21 @@ try {
     const remaining = Math.max(0, limit - spent);
     const percentage = limit > 0 ? Math.min(Math.round((spent / limit) * 100), 100) : 0;
 
-    // Clasificación de color según requerimiento:
-    // > 85%: progress-error | > 60%: progress-warning | < 60%: progress-success
+    const isOcio =
+      cat.name.toLowerCase().includes('ocio') || cat.name.toLowerCase().includes('hormiga');
+
+    // Regla de Negocio: En "Ocio y Hormiga", si el gasto supera L. 1,000 se vuelve ROJO inmediatamente
     let progressClass = 'progress-success';
     let badgeClass = 'badge-success text-success-content font-bold';
+    const isOcioDanger = isOcio && spent > 1000;
 
-    if (percentage > 85) {
+    if (isOcioDanger || percentage > 85) {
       progressClass = 'progress-error';
       badgeClass = 'badge-error text-error-content font-extrabold';
     } else if (percentage > 60) {
       progressClass = 'progress-warning';
       badgeClass = 'badge-warning text-warning-content font-bold';
     }
-
-    const isLeak = cat.name.toLowerCase().includes('suscrip') || cat.name.toLowerCase().includes('hormiga');
 
     categoriesList.push({
       id: cat.id,
@@ -90,7 +93,8 @@ try {
       progressClass,
       badgeClass,
       icon: cat.icon || '📌',
-      isLeakWarning: isLeak,
+      isOcioDanger,
+      isHardStopTriggered: spent >= limit,
     });
 
     totalBudget += limit;
@@ -103,6 +107,7 @@ try {
       id: schema.transactions.id,
       amount: schema.transactions.amount,
       description: schema.transactions.description,
+      paymentMethod: schema.transactions.payment_method,
       date: schema.transactions.date,
       categoryName: schema.categories.name,
       icon: schema.categories.icon,
@@ -110,78 +115,103 @@ try {
     .from(schema.transactions)
     .leftJoin(schema.categories, eq(schema.transactions.category_id, schema.categories.id))
     .orderBy(desc(schema.transactions.date))
-    .limit(5);
+    .limit(6);
 
   recentTransactions = rawTransactions.map((t) => ({
     id: t.id,
     amount: parseFloat(t.amount).toFixed(2),
     description: t.description || 'Gasto registrado',
+    paymentMethod: t.paymentMethod || 'DEBITO_EFECTIVO',
     categoryName: t.categoryName || 'General',
     icon: t.icon || '🏷️',
-    formattedDate: new Date(t.date).toLocaleDateString('es-HN', { day: 'numeric', month: 'short' }),
+    formattedDate: new Date(t.date).toLocaleDateString('es-HN', {
+      day: 'numeric',
+      month: 'short',
+    }),
   }));
 } catch (error) {
   dbConfigured = false;
+  // Fallback con categorías del Modo Supervivencia de Luis
   categoriesList = [
     {
       id: 1,
-      name: 'Suscripciones & Software',
-      monthlyLimit: 1200.0,
-      currentSpent: 1080.0,
-      remaining: 120.0,
-      percentage: 90,
-      progressClass: 'progress-error',
-      badgeClass: 'badge-error text-error-content font-extrabold',
-      icon: '💻',
-      isLeakWarning: true,
-    },
-    {
-      id: 2,
-      name: 'Gastos Hormiga (Café/Snacks)',
-      monthlyLimit: 1500.0,
-      currentSpent: 990.0,
-      remaining: 510.0,
-      percentage: 66,
-      progressClass: 'progress-warning',
-      badgeClass: 'badge-warning text-warning-content font-bold',
-      icon: '🐜',
-      isLeakWarning: true,
-    },
-    {
-      id: 3,
-      name: 'Básico y Supermercado',
-      monthlyLimit: 7500.0,
-      currentSpent: 3200.0,
-      remaining: 4300.0,
-      percentage: 42,
+      name: 'Supermercado',
+      monthlyLimit: 4000.0,
+      currentSpent: 0.0,
+      remaining: 4000.0,
+      percentage: 0,
       progressClass: 'progress-success',
       badgeClass: 'badge-success text-success-content font-bold',
       icon: '🛒',
-      isLeakWarning: false,
+      isOcioDanger: false,
+      isHardStopTriggered: false,
     },
     {
-      id: 4,
-      name: 'Transporte y Gasolina',
-      monthlyLimit: 3000.0,
-      currentSpent: 1650.0,
-      remaining: 1350.0,
-      percentage: 55,
+      id: 2,
+      name: 'Gasolina',
+      monthlyLimit: 2000.0,
+      currentSpent: 0.0,
+      remaining: 2000.0,
+      percentage: 0,
       progressClass: 'progress-success',
       badgeClass: 'badge-success text-success-content font-bold',
       icon: '⛽',
-      isLeakWarning: false,
+      isOcioDanger: false,
+      isHardStopTriggered: false,
+    },
+    {
+      id: 3,
+      name: 'Ocio y Hormiga',
+      monthlyLimit: 1500.0,
+      currentSpent: 0.0,
+      remaining: 1500.0,
+      percentage: 0,
+      progressClass: 'progress-success',
+      badgeClass: 'badge-success text-success-content font-bold',
+      icon: '🐜',
+      isOcioDanger: false,
+      isHardStopTriggered: false,
+    },
+    {
+      id: 4,
+      name: 'Software (Vital)',
+      monthlyLimit: 1500.0,
+      currentSpent: 0.0,
+      remaining: 1500.0,
+      percentage: 0,
+      progressClass: 'progress-success',
+      badgeClass: 'badge-success text-success-content font-bold',
+      icon: '💻',
+      isOcioDanger: false,
+      isHardStopTriggered: false,
     },
   ];
-  totalBudget = 13200.0;
-  totalSpent = 6920.0;
+  totalBudget = 9000.0;
+  totalSpent = 0.0;
 }
 
-const currentMonthLabel = now.toLocaleDateString('es-HN', { month: 'long', year: 'numeric' });
+const currentMonthLabel = 'Octubre 2026';
 const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
 ---
 
-<Layout title="Control CRONOS">
-  <!-- ALERTA PROACTIVA OBLIGATORIA (Días 17 al 20) -->
+<Layout title="CRONOS - MODO RESCATE (OCTUBRE)">
+  <!-- ALERTA DE RESCATE: PÉRDIDA DE PERIODO DE GRACIA -->
+  <div class="alert alert-error shadow-xl mb-4 border-2 border-error/50 bg-error/15 text-base-content flex items-start gap-2.5">
+    <span class="text-2xl mt-0.5">⚠️</span>
+    <div>
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <h4 class="font-black text-xs uppercase tracking-wider text-error">
+          MODO SUPERVIVENCIA ACTIVO
+        </h4>
+        <span class="badge badge-error text-error-content badge-xs font-black">SIN GRACIA</span>
+      </div>
+      <p class="text-[11px] font-bold leading-tight mt-0.5">
+        Has perdido el periodo de gracia en tus tarjetas este mes. Cualquier pago con crédito generará intereses inmediatos. <strong>Usa Débito o Efectivo</strong>.
+      </p>
+    </div>
+  </div>
+
+  <!-- ALERTA PROACTIVA DE DEUDA FIJA (Días 17 al 20) -->
   {isDebtAlertActive && (
     <div class="alert alert-warning shadow-xl mb-4 flex items-start gap-2.5 border-l-4 border-warning text-warning-content animate-pulse">
       <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6 mt-0.5" fill="none" viewBox="0 0 24 24">
@@ -196,14 +226,85 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
     </div>
   )}
 
-  <!-- Banner Informativo de Conexión a Neon si no está conectada -->
-  {!dbConfigured && (
-    <div class="alert alert-info shadow-sm mb-4 text-xs py-2 text-info-content">
-      <span>💡 Modo local de demostración. Configura <code class="font-bold">DATABASE_URL</code> en <code class="font-bold">.env</code> para sincronizar con Neon.</span>
-    </div>
-  )}
+  <!-- CHECKLIST: FUGAS A CORTAR HOY (Suscripciones a cancelar) -->
+  <section class="card bg-base-200 border border-error/30 shadow-xl mb-5 overflow-hidden">
+    <div class="card-body p-4">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">✂️</span>
+          <div>
+            <h3 class="font-black text-sm uppercase tracking-wide text-error">
+              Fugas a Cortar Hoy
+            </h3>
+            <p class="text-[10px] text-base-content/70">
+              Marca las suscripciones al cancelarlas para detener fugas:
+            </p>
+          </div>
+        </div>
+        <span id="leaks-badge" class="badge badge-error text-error-content font-black text-[10px] py-2">
+          $54.98 / mes
+        </span>
+      </div>
 
-  <!-- Tarjeta Resumen Financiero: Salario & Control Global (Forest Palette) -->
+      <div class="divider my-1"></div>
+
+      <div class="space-y-2 mt-0.5" id="leaks-checklist">
+        <!-- Item 1 -->
+        <label class="flex items-center gap-3 p-2 rounded-xl bg-base-100 border border-base-content/5 cursor-pointer hover:border-error/40 transition-colors">
+          <input
+            type="checkbox"
+            data-leak-id="nanonoble"
+            class="checkbox checkbox-error checkbox-sm"
+          />
+          <div class="flex-1 flex justify-between items-center text-xs">
+            <span class="font-bold text-base-content leak-title">Cancelar Nanonoble</span>
+            <span class="badge badge-neutral badge-xs font-extrabold text-error">$20.00</span>
+          </div>
+        </label>
+
+        <!-- Item 2 -->
+        <label class="flex items-center gap-3 p-2 rounded-xl bg-base-100 border border-base-content/5 cursor-pointer hover:border-error/40 transition-colors">
+          <input
+            type="checkbox"
+            data-leak-id="appleone"
+            class="checkbox checkbox-error checkbox-sm"
+          />
+          <div class="flex-1 flex justify-between items-center text-xs">
+            <span class="font-bold text-base-content leak-title">Cancelar Apple One</span>
+            <span class="badge badge-neutral badge-xs font-extrabold text-error">$16.95</span>
+          </div>
+        </label>
+
+        <!-- Item 3 -->
+        <label class="flex items-center gap-3 p-2 rounded-xl bg-base-100 border border-base-content/5 cursor-pointer hover:border-error/40 transition-colors">
+          <input
+            type="checkbox"
+            data-leak-id="amazonprime"
+            class="checkbox checkbox-error checkbox-sm"
+          />
+          <div class="flex-1 flex justify-between items-center text-xs">
+            <span class="font-bold text-base-content leak-title">Cancelar Amazon Prime</span>
+            <span class="badge badge-neutral badge-xs font-extrabold text-error">$16.04</span>
+          </div>
+        </label>
+
+        <!-- Item 4 -->
+        <label class="flex items-center gap-3 p-2 rounded-xl bg-base-100 border border-base-content/5 cursor-pointer hover:border-error/40 transition-colors">
+          <input
+            type="checkbox"
+            data-leak-id="twitch"
+            class="checkbox checkbox-error checkbox-sm"
+          />
+          <div class="flex-1 flex justify-between items-center text-xs">
+            <span class="font-bold text-base-content leak-title">Cancelar Twitch</span>
+            <span class="badge badge-neutral badge-xs font-extrabold text-error">$1.99</span>
+          </div>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tarjeta Resumen Financiero: Salario & Control Global -->
   <section class="card bg-base-200 border border-base-300 shadow-2xl mb-5 text-base-content overflow-hidden">
     <div class="card-body p-4.5">
       <div class="flex justify-between items-start">
@@ -236,7 +337,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
     </div>
   </section>
 
-  <!-- Dashboard de Categorías con Barras de Progreso DaisyUI -->
+  <!-- Dashboard de Categorías con Barras de Progreso DaisyUI & Regla Ocio -->
   <section class="mb-6">
     <div class="flex justify-between items-center mb-3">
       <h3 class="font-extrabold text-sm text-base-content flex items-center gap-1.5 uppercase tracking-wide">
@@ -253,8 +354,10 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
               <span class="text-lg">{cat.icon}</span>
               <div>
                 <span class="font-bold text-sm text-base-content block leading-tight">{cat.name}</span>
-                {cat.isLeakWarning && (
-                  <span class="badge badge-error text-error-content text-[9px] py-0 px-1.5 font-black">Fuga Detectada</span>
+                {cat.isOcioDanger && (
+                  <span class="badge badge-error text-error-content text-[9px] py-0 px-1.5 font-black animate-pulse">
+                    ⚠️ ALERTA: &gt; L. 1,000 Gastados
+                  </span>
                 )}
               </div>
             </div>
@@ -264,7 +367,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
           </div>
 
           <!-- Barra de Progreso DaisyUI -->
-          <!-- > 85%: progress-error | > 60%: progress-warning | < 60%: progress-success -->
+          <!-- Ocio > 1000 se vuelve ROJO obligatorio, al igual que > 85% -->
           <progress
             class={`progress ${cat.progressClass} w-full h-2.5 my-1.5`}
             value={cat.currentSpent}
@@ -276,9 +379,9 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
             <span>Límite: L. {cat.monthlyLimit.toFixed(2)}</span>
           </div>
 
-          {cat.percentage >= 100 && (
+          {cat.isHardStopTriggered && (
             <div class="text-[10px] text-error font-extrabold mt-1.5 flex items-center gap-1 bg-error/15 p-1.5 rounded-lg border border-error/30">
-              🛑 <span>Hard Stop Activo: No se permiten más gastos en esta categoría.</span>
+              🛑 <span>Hard Stop Activo: Límite mensual agotado. Compras bloqueadas.</span>
             </div>
           )}
         </div>
@@ -299,7 +402,14 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
               <span class="text-base">{item.icon}</span>
               <div>
                 <p class="font-bold text-xs text-base-content leading-tight">{item.description}</p>
-                <p class="text-[10px] text-base-content/60">{item.categoryName} • {item.formattedDate}</p>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                  <span class="text-[10px] text-base-content/60">{item.categoryName} • {item.formattedDate}</span>
+                  {item.paymentMethod === 'TARJETA_CREDITO' ? (
+                    <span class="badge badge-error badge-xs text-[8px] font-black py-0 px-1">💳 Crédito</span>
+                  ) : (
+                    <span class="badge badge-success badge-xs text-[8px] font-black py-0 px-1">💵 Débito</span>
+                  )}
+                </div>
               </div>
             </div>
             <span class="font-extrabold text-xs text-primary">L. {item.amount}</span>
@@ -331,9 +441,9 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
         </form>
       </div>
 
-      <form id="cronos-transaction-form" class="space-y-4">
+      <form id="cronos-transaction-form" class="space-y-3.5">
         <!-- Input de Número Gigante -->
-        <div class="form-control text-center py-2">
+        <div class="form-control text-center py-1">
           <label class="label-text text-xs text-base-content/60 uppercase font-bold tracking-wider mb-1 block">
             Monto a Registrar
           </label>
@@ -352,9 +462,50 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
           </div>
         </div>
 
+        <!-- Selector de Método de Pago: Bloqueo de Plástico -->
+        <div class="form-control">
+          <label class="label py-0.5">
+            <span class="label-text text-xs font-bold text-base-content">¿Con qué vas a pagar?</span>
+          </label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="cursor-pointer label border border-base-content/15 rounded-xl p-2 bg-base-100 hover:border-success transition-all has-[:checked]:border-success has-[:checked]:bg-success/10">
+              <div class="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="payment_method"
+                  id="pm_debito"
+                  value="DEBITO_EFECTIVO"
+                  checked
+                  class="radio radio-success radio-xs"
+                />
+                <div class="text-left">
+                  <span class="label-text text-xs font-black block text-base-content leading-none">💵 Débito / Efec.</span>
+                  <span class="text-[9px] text-success font-bold">Sin interés</span>
+                </div>
+              </div>
+            </label>
+
+            <label class="cursor-pointer label border border-base-content/15 rounded-xl p-2 bg-base-100 hover:border-error transition-all has-[:checked]:border-error has-[:checked]:bg-error/10">
+              <div class="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="payment_method"
+                  id="pm_credito"
+                  value="TARJETA_CREDITO"
+                  class="radio radio-error radio-xs"
+                />
+                <div class="text-left">
+                  <span class="label-text text-xs font-black block text-base-content leading-none">💳 Tarjeta Crédito</span>
+                  <span class="text-[9px] text-error font-bold">¡Interés HOY!</span>
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
         <!-- Selector de Categorías -->
         <div class="form-control">
-          <label class="label py-1">
+          <label class="label py-0.5">
             <span class="label-text text-xs font-bold text-base-content">Categoría</span>
           </label>
           <select id="quick_category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100 text-base-content font-semibold">
@@ -369,14 +520,14 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
 
         <!-- Descripción -->
         <div class="form-control">
-          <label class="label py-1">
+          <label class="label py-0.5">
             <span class="label-text text-xs font-bold text-base-content">Descripción</span>
           </label>
           <input
             type="text"
             id="quick_description"
             name="description"
-            placeholder="Ej. Café, suscripción, almuerzo..."
+            placeholder="Ej. Despensa, combustible, café..."
             class="input input-bordered input-sm w-full bg-base-100 text-base-content font-medium"
           />
         </div>
@@ -385,7 +536,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
         <button
           type="submit"
           id="btn-submit-quick"
-          class="btn btn-primary text-primary-content btn-block font-extrabold normal-case text-sm mt-3 shadow-lg"
+          class="btn btn-primary text-primary-content btn-block font-extrabold normal-case text-sm mt-2 shadow-lg"
         >
           <span id="btn-quick-text">Aplicar Gasto</span>
           <span id="btn-quick-spinner" class="loading loading-spinner loading-xs hidden"></span>
@@ -396,11 +547,95 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
       <button>close</button>
     </form>
   </dialog>
+
+  <!-- MODAL DE ADVERTENCIA ROJA: BLOQUEO DE PLÁSTICO (INTERCEPCIÓN) -->
+  <dialog id="modal_plastic_warning" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box p-5 bg-base-200 border-2 border-error text-base-content max-w-md mx-auto shadow-2xl">
+      <div class="flex items-start gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-error/20 text-error flex items-center justify-center text-2xl font-black shrink-0 border border-error/30 animate-pulse">
+          🛑
+        </div>
+        <div>
+          <h3 class="font-black text-base text-error uppercase tracking-tight">
+            ¡ALTO LUIS!
+          </h3>
+          <p class="text-xs text-base-content font-bold mt-1.5 leading-relaxed">
+            Perdiste tu periodo de gracia este mes. Si pasas la tarjeta por <strong class="text-error font-black text-sm">L. <span id="warning_card_amount">0.00</span></strong>, el banco te cobrará intereses desde HOY. Usa Débito o cancela la compra.
+          </p>
+        </div>
+      </div>
+
+      <div class="divider my-3"></div>
+
+      <div class="flex flex-col gap-2 mt-1">
+        <button
+          type="button"
+          id="btn-plastic-cancel"
+          class="btn btn-success text-success-content font-black text-xs normal-case shadow-md"
+        >
+          ✅ Cambiar a Débito / Efectivo (Recomendado)
+        </button>
+        <button
+          type="button"
+          id="btn-plastic-confirm"
+          class="btn btn-outline btn-error btn-xs font-bold text-[11px] normal-case opacity-75 hover:opacity-100"
+        >
+          ⚠️ Confirmar bajo mi propio riesgo
+        </button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
 </Layout>
 
 <script>
-  // Control del Dialog / Bottom Sheet Modal
-  const modal = document.getElementById('modal_quick_expense') as HTMLDialogElement;
+  // Control del Checklist "Fugas a Cortar Hoy" (Persistencia en LocalStorage)
+  const checklistContainer = document.getElementById('leaks-checklist');
+  const LEAKS_STORAGE_KEY = 'cronos_survival_cancelled_leaks_v1';
+
+  function initChecklist() {
+    let savedState: Record<string, boolean> = {};
+    try {
+      const raw = localStorage.getItem(LEAKS_STORAGE_KEY);
+      if (raw) savedState = JSON.parse(raw);
+    } catch (e) {
+      console.warn('Error leyendo checklist de localStorage');
+    }
+
+    const checkboxes = checklistContainer?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+    checkboxes?.forEach((cb) => {
+      const leakId = cb.getAttribute('data-leak-id');
+      const labelSpan = cb.closest('label')?.querySelector('.leak-title');
+
+      if (leakId && savedState[leakId]) {
+        cb.checked = true;
+        labelSpan?.classList.add('line-through', 'opacity-50');
+      }
+
+      cb.addEventListener('change', () => {
+        if (!leakId) return;
+        savedState[leakId] = cb.checked;
+        try {
+          localStorage.setItem(LEAKS_STORAGE_KEY, JSON.stringify(savedState));
+        } catch (e) {}
+
+        if (cb.checked) {
+          labelSpan?.classList.add('line-through', 'opacity-50');
+          showDaisyToast('¡Fuga cancelada! Ahorro mensual asegurado.', false);
+        } else {
+          labelSpan?.classList.remove('line-through', 'opacity-50');
+        }
+      });
+    });
+  }
+
+  initChecklist();
+
+  // Control de Modales y Formulario
+  const modalQuick = document.getElementById('modal_quick_expense') as HTMLDialogElement;
+  const modalPlastic = document.getElementById('modal_plastic_warning') as HTMLDialogElement;
   const btnOpenFab = document.getElementById('btn-open-fab') as HTMLButtonElement;
   const form = document.getElementById('cronos-transaction-form') as HTMLFormElement;
   const amountInput = document.getElementById('quick_amount') as HTMLInputElement;
@@ -411,8 +646,17 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
   const btnSpinner = document.getElementById('btn-quick-spinner') as HTMLSpanElement;
   const toastContainer = document.getElementById('toast-container') as HTMLDivElement;
 
+  const warningCardAmount = document.getElementById('warning_card_amount') as HTMLSpanElement;
+  const btnPlasticCancel = document.getElementById('btn-plastic-cancel') as HTMLButtonElement;
+  const btnPlasticConfirm = document.getElementById('btn-plastic-confirm') as HTMLButtonElement;
+  const pmDebito = document.getElementById('pm_debito') as HTMLInputElement;
+  const pmCredito = document.getElementById('pm_credito') as HTMLInputElement;
+
+  let plasticRiskAccepted = false;
+
   btnOpenFab?.addEventListener('click', () => {
-    modal.showModal();
+    modalQuick.showModal();
+    plasticRiskAccepted = false;
     setTimeout(() => amountInput?.focus(), 150);
   });
 
@@ -433,21 +677,58 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
       toastDiv.classList.remove('animate-bounce');
       toastDiv.classList.add('opacity-0', 'scale-90');
       setTimeout(() => toastDiv.remove(), 300);
-    }, 3500);
+    }, 4000);
   }
 
+  // Botón Cancelar del Modal de Plástico -> Cambiar a Débito
+  btnPlasticCancel?.addEventListener('click', () => {
+    modalPlastic.close();
+    if (pmDebito) pmDebito.checked = true;
+    plasticRiskAccepted = false;
+    showDaisyToast('Método cambiado a Débito/Efectivo para protegerte de intereses.', false);
+  });
+
+  // Botón Confirmar del Modal de Plástico -> Proceder bajo propio riesgo
+  btnPlasticConfirm?.addEventListener('click', () => {
+    plasticRiskAccepted = true;
+    modalPlastic.close();
+    executeSubmit();
+  });
+
   // Envío del Formulario
-  form?.addEventListener('submit', async (e) => {
+  form?.addEventListener('submit', (e) => {
     e.preventDefault();
 
     const amount = parseFloat(amountInput.value);
     const category_id = parseInt(categorySelect.value);
-    const description = descriptionInput.value.trim();
 
     if (isNaN(amount) || amount <= 0 || isNaN(category_id)) {
-      showDaisyToast('Por favor completa todos los campos requeridos.', true);
+      showDaisyToast('Por favor ingresa un monto válido y selecciona una categoría.', true);
       return;
     }
+
+    const selectedPaymentMethod = pmCredito?.checked ? 'TARJETA_CREDITO' : 'DEBITO_EFECTIVO';
+
+    // 🛑 REGLA DE INTERCEPCIÓN: BLOQUEO DE PLÁSTICO
+    if (selectedPaymentMethod === 'TARJETA_CREDITO' && !plasticRiskAccepted) {
+      if (warningCardAmount) {
+        warningCardAmount.textContent = amount.toLocaleString('es-HN', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+      }
+      modalPlastic.showModal();
+      return;
+    }
+
+    executeSubmit();
+  });
+
+  async function executeSubmit() {
+    const amount = parseFloat(amountInput.value);
+    const category_id = parseInt(categorySelect.value);
+    const description = descriptionInput.value.trim();
+    const payment_method = pmCredito?.checked ? 'TARJETA_CREDITO' : 'DEBITO_EFECTIVO';
 
     btnSubmit.disabled = true;
     btnText.textContent = 'Verificando Hard Stop...';
@@ -461,27 +742,30 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
           amount,
           category_id,
           description,
+          payment_method,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        // HTTP 400: Límite excedido. Transacción bloqueada.
+        // Bloqueo 400 Bad Request
         showDaisyToast(data.error || 'Límite excedido. Transacción bloqueada.', true);
       } else {
         // HTTP 200: Éxito
-        showDaisyToast('Transacción registrada exitosamente.', false);
+        showDaisyToast('Gasto registrado con éxito.', false);
         form.reset();
-        modal.close();
+        plasticRiskAccepted = false;
+        modalQuick.close();
         setTimeout(() => window.location.reload(), 1000);
       }
     } catch (err) {
-      showDaisyToast('Error de red al procesar transacción.', true);
+      showDaisyToast('Error de red al registrar la transacción.', true);
     } finally {
       btnSubmit.disabled = false;
       btnText.textContent = 'Aplicar Gasto';
       btnSpinner.classList.add('hidden');
+      plasticRiskAccepted = false;
     }
-  });
+  }
 </script>

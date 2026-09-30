@@ -12,6 +12,7 @@ export const GET: APIRoute = async () => {
         id: schema.transactions.id,
         amount: schema.transactions.amount,
         description: schema.transactions.description,
+        paymentMethod: schema.transactions.payment_method,
         date: schema.transactions.date,
         categoryId: schema.transactions.category_id,
         categoryName: schema.categories.name,
@@ -38,7 +39,7 @@ export const GET: APIRoute = async () => {
 export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json();
-    const { amount, category_id, description, date } = body;
+    const { amount, category_id, description, date, payment_method } = body;
 
     const parsedAmount = Number(amount);
     const parsedCategoryId = Number(category_id);
@@ -56,6 +57,12 @@ export const POST: APIRoute = async ({ request }) => {
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
+
+    // Validar método de pago (Modo Supervivencia: DEBITO_EFECTIVO o TARJETA_CREDITO)
+    const validPaymentMethods = ['DEBITO_EFECTIVO', 'TARJETA_CREDITO'];
+    const validatedPaymentMethod = validPaymentMethods.includes(payment_method)
+      ? payment_method
+      : 'DEBITO_EFECTIVO';
 
     // 1. Obtener la categoría y su límite mensual
     const [category] = await db
@@ -101,9 +108,17 @@ export const POST: APIRoute = async ({ request }) => {
     // 🛑 REGLA DE NEGOCIO CRÍTICA (Hard Stop):
     // Si total_actual + nuevo_monto > monthly_limit, RECHAZAR con HTTP 400
     if (projectedTotal > monthlyLimit) {
+      const isOcio =
+        category.name.toLowerCase().includes('ocio') ||
+        category.name.toLowerCase().includes('hormiga');
+
+      const errorMessage = isOcio
+        ? 'Límite de Ocio superado. Regla de Hard Stop activa, compra bloqueada.'
+        : 'Límite excedido. Transacción bloqueada.';
+
       return new Response(
         JSON.stringify({
-          error: 'Límite excedido. Transacción bloqueada.',
+          error: errorMessage,
           details: {
             categoryName: category.name,
             monthlyLimit: monthlyLimit.toFixed(2),
@@ -127,6 +142,7 @@ export const POST: APIRoute = async ({ request }) => {
         amount: parsedAmount.toFixed(2),
         category_id: parsedCategoryId,
         description: description ? String(description).trim() : null,
+        payment_method: validatedPaymentMethod,
         date: transactionDate,
       })
       .returning();
@@ -138,6 +154,7 @@ export const POST: APIRoute = async ({ request }) => {
         data: newTransaction,
         summary: {
           categoryName: category.name,
+          paymentMethod: validatedPaymentMethod,
           monthlyLimit: monthlyLimit.toFixed(2),
           newTotalSpent: projectedTotal.toFixed(2),
           remaining: (monthlyLimit - projectedTotal).toFixed(2),

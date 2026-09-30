@@ -17,6 +17,7 @@ export const transactions = pgTable('transactions', {
     .notNull()
     .references(() => categories.id, { onDelete: 'cascade' }),
   description: varchar('description', { length: 255 }),
+  payment_method: varchar('payment_method', { length: 30 }).notNull().default('DEBITO_EFECTIVO'),
   date: timestamp('date', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 });
 
