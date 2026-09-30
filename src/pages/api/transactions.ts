@@ -1,81 +1,63 @@
 import type { APIRoute } from 'astro';
 import { db, schema } from '../../db';
 import { eq, and, gte, lte, desc } from 'drizzle-orm';
-import { getLiveUsdHnlRate } from './exchange-rate';
 
 export const prerender = false;
 
-// GET: Obtener transacciones recientes con desglose bimoneda
+// GET: Consultar transacciones recientes
 export const GET: APIRoute = async () => {
   try {
-    const allTransactions = await db
+    const list = await db
       .select({
         id: schema.transactions.id,
-        amount: schema.transactions.amount, // En Lempiras
-        currency: schema.transactions.currency,
-        originalAmount: schema.transactions.original_amount,
-        exchangeRate: schema.transactions.exchange_rate,
+        amount: schema.transactions.amount,
         description: schema.transactions.description,
         date: schema.transactions.date,
         categoryId: schema.transactions.category_id,
         categoryName: schema.categories.name,
+        categoryIcon: schema.categories.icon,
       })
       .from(schema.transactions)
-      .leftJoin(
-        schema.categories,
-        eq(schema.transactions.category_id, schema.categories.id)
-      )
+      .leftJoin(schema.categories, eq(schema.transactions.category_id, schema.categories.id))
       .orderBy(desc(schema.transactions.date))
       .limit(30);
 
-    return new Response(JSON.stringify({ success: true, data: allTransactions }), {
+    return new Response(JSON.stringify({ success: true, data: list }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
     return new Response(
-      JSON.stringify({ success: false, error: error.message || 'Error al obtener transacciones' }),
+      JSON.stringify({ error: error.message || 'Error al obtener transacciones' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 };
 
-// POST: Registrar nuevo gasto con conversión en tiempo real
+// POST: Registrar gasto con Bloqueo Duro (Hard Stop) si supera el límite
 export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json();
-    const { amount, currency = 'HNL', exchange_rate, category_id, description, date } = body;
+    const { amount, category_id, description, date } = body;
 
     const parsedAmount = Number(amount);
     const parsedCategoryId = Number(category_id);
-    const selectedCurrency = currency === 'USD' ? 'USD' : 'HNL';
 
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       return new Response(
-        JSON.stringify({ error: 'El monto ingresado debe ser un número mayor a cero.' }),
+        JSON.stringify({ error: 'Monto inválido. Debe ingresar un valor mayor a cero.' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
     if (!parsedCategoryId || isNaN(parsedCategoryId)) {
       return new Response(
-        JSON.stringify({ error: 'Debe especificar una categoría válida.' }),
+        JSON.stringify({ error: 'Debe seleccionar una categoría válida.' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // Obtener la tasa de cambio en vivo si la moneda es USD
-    let appliedRate = 1.0;
-    if (selectedCurrency === 'USD') {
-      if (exchange_rate && !isNaN(Number(exchange_rate)) && Number(exchange_rate) > 0) {
-        appliedRate = Number(exchange_rate);
-      } else {
-        const liveInfo = await getLiveUsdHnlRate();
-        appliedRate = liveInfo.rate;
-      }
-    }
-
-    // 1. Obtener la categoría y su límite mensual en Lempiras
+    // 1. Obtener la categoría y su límite mensual
     const [category] = await db
       .select()
       .from(schema.categories)
@@ -89,9 +71,6 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 2. Convertir el gasto a Lempiras (HNL) con la tasa en tiempo real
-    const amountInHnl = selectedCurrency === 'USD' ? parsedAmount * appliedRate : parsedAmount;
-
     const transactionDate = date ? new Date(date) : new Date();
     const currentYear = transactionDate.getFullYear();
     const currentMonth = transactionDate.getMonth();
@@ -99,7 +78,7 @@ export const POST: APIRoute = async ({ request }) => {
     const startOfMonth = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
     const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
 
-    // 3. Sumar las transacciones del mes actual de esa categoría (en Lempiras)
+    // 2. Sumar transacciones del mes actual para la categoría
     const monthlyTransactions = await db
       .select({ amount: schema.transactions.amount })
       .from(schema.transactions)
@@ -111,31 +90,27 @@ export const POST: APIRoute = async ({ request }) => {
         )
       );
 
-    const currentSpentHnl = monthlyTransactions.reduce(
+    const currentSpent = monthlyTransactions.reduce(
       (sum, item) => sum + parseFloat(item.amount),
       0
     );
 
-    const monthlyLimitHnl = parseFloat(category.monthly_limit);
-    const projectedTotalHnl = currentSpentHnl + amountInHnl;
+    const monthlyLimit = parseFloat(category.monthly_limit);
+    const projectedTotal = currentSpent + parsedAmount;
 
-    // 4. Validar si el nuevo gasto supera el monthly_limit en Lempiras
-    if (projectedTotalHnl > monthlyLimitHnl) {
-      const excessHnl = (projectedTotalHnl - monthlyLimitHnl).toFixed(2);
+    // 🛑 REGLA DE NEGOCIO CRÍTICA (Hard Stop):
+    // Si total_actual + nuevo_monto > monthly_limit, RECHAZAR con HTTP 400
+    if (projectedTotal > monthlyLimit) {
       return new Response(
         JSON.stringify({
-          error: `Gasto rechazado: este registro excede el límite mensual de la categoría "${category.name}".`,
+          error: 'Límite excedido. Transacción bloqueada.',
           details: {
             categoryName: category.name,
-            currency: selectedCurrency,
-            rateUsed: appliedRate.toFixed(4),
-            monthlyLimit: `L. ${monthlyLimitHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`,
-            currentSpent: `L. ${currentSpentHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`,
-            attemptedAmount: selectedCurrency === 'USD'
-              ? `$${parsedAmount.toFixed(2)} USD (convertido a L. ${amountInHnl.toFixed(2)} a tasa L. ${appliedRate.toFixed(2)})`
-              : `L. ${parsedAmount.toFixed(2)}`,
-            projectedTotal: `L. ${projectedTotalHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`,
-            exceededBy: `L. ${excessHnl}`,
+            monthlyLimit: monthlyLimit.toFixed(2),
+            currentSpent: currentSpent.toFixed(2),
+            attemptedAmount: parsedAmount.toFixed(2),
+            projectedTotal: projectedTotal.toFixed(2),
+            exceededBy: (projectedTotal - monthlyLimit).toFixed(2),
           },
         }),
         {
@@ -145,14 +120,11 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 5. Registrar la transacción con trazabilidad de la tasa de conversión
+    // 3. Si es válido, insertar en Neon y retornar HTTP 200
     const [newTransaction] = await db
       .insert(schema.transactions)
       .values({
-        amount: amountInHnl.toFixed(2), // Consolidado en Lempiras
-        currency: selectedCurrency,
-        original_amount: parsedAmount.toFixed(2),
-        exchange_rate: appliedRate.toFixed(4),
+        amount: parsedAmount.toFixed(2),
         category_id: parsedCategoryId,
         description: description ? String(description).trim() : null,
         date: transactionDate,
@@ -162,28 +134,24 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Gasto registrado con éxito.',
+        message: 'Transacción registrada exitosamente.',
         data: newTransaction,
         summary: {
           categoryName: category.name,
-          currency: selectedCurrency,
-          originalAmount: parsedAmount.toFixed(2),
-          rateUsed: appliedRate.toFixed(4),
-          amountInHnl: amountInHnl.toFixed(2),
-          monthlyLimitHnl: monthlyLimitHnl.toFixed(2),
-          newTotalSpentHnl: projectedTotalHnl.toFixed(2),
-          remainingBudgetHnl: (monthlyLimitHnl - projectedTotalHnl).toFixed(2),
+          monthlyLimit: monthlyLimit.toFixed(2),
+          newTotalSpent: projectedTotal.toFixed(2),
+          remaining: (monthlyLimit - projectedTotal).toFixed(2),
         },
       }),
       {
-        status: 201,
+        status: 200,
         headers: { 'Content-Type': 'application/json' },
       }
     );
   } catch (error: any) {
     console.error('Error en POST /api/transactions:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Error interno al procesar la transacción.' }),
+      JSON.stringify({ error: error.message || 'Error interno del servidor.' }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },

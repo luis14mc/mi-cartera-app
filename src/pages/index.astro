@@ -1,69 +1,51 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { db, schema } from '../db';
-import { eq, and, gte, lte, asc, desc } from 'drizzle-orm';
-import { getLiveUsdHnlRate } from './api/exchange-rate';
+import { eq, and, gte, lte, desc } from 'drizzle-orm';
 
 export const prerender = false;
 
-// Obtener la tasa de cambio en tiempo real durante el SSR
-const liveRateData = await getLiveUsdHnlRate();
-const LIVE_USD_RATE = liveRateData.rate;
+// Parámetros financieros estrictos de Control CRONOS
+const MONTHLY_SALARY = 26518.0;
+const FIXED_DEBT_AMOUNT = 4400.0;
+const DEBT_DUE_DAY = 20;
 
-interface CategoryView {
+// Lógica de detección de fecha para Alerta Proactiva (Días 17 al 20)
+const now = new Date();
+const currentDay = now.getDate();
+const isDebtAlertActive = currentDay >= 17 && currentDay <= DEBT_DUE_DAY;
+
+interface CategoryCard {
   id: number;
   name: string;
-  monthlyLimitHnl: number;
-  currentSpentHnl: number;
-  remainingHnl: number;
+  monthlyLimit: number;
+  currentSpent: number;
+  remaining: number;
   percentage: number;
-  isExceeded: boolean;
-  isNearLimit: boolean;
-  progressColor: string;
-  badgeColor: string;
-}
-
-interface PaymentView {
-  id: number;
-  title: string;
-  amount: string;
-  currency: string;
-  amountInHnl: number;
-  formattedAmount: string;
-  equivalentAmount: string;
-  formattedDate: string;
-  isPaid: boolean;
-  daysRemaining: number;
-  isUrgent: boolean;
-  isDay20: boolean;
-}
-
-interface TransactionView {
-  id: number;
-  description: string;
-  categoryName: string;
-  amountHnl: string;
-  currency: string;
-  originalAmount: string;
-  exchangeRate: string;
-  isUsd: boolean;
-  dateFormatted: string;
+  progressClass: string;
+  badgeClass: string;
+  icon: string;
+  isLeakWarning: boolean;
 }
 
 let dbConfigured = true;
-let categoriesView: CategoryView[] = [];
-let upcomingPaymentsView: PaymentView[] = [];
-let recentTransactionsView: TransactionView[] = [];
-let totalBudgetHnl = 0;
-let totalSpentHnl = 0;
-let errorMessage = '';
+let categoriesList: CategoryCard[] = [];
+let totalSpent = 0;
+let totalBudget = 0;
+let recentTransactions: Array<{
+  id: number;
+  amount: string;
+  description: string;
+  categoryName: string;
+  icon: string;
+  formattedDate: string;
+}> = [];
 
 try {
-  const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  // 1. Obtener categorías desde la base de datos
+  // 1. Consultar categorías desde Neon
   const rawCategories = await db.select().from(schema.categories);
 
   for (const cat of rawCategories) {
@@ -82,784 +64,394 @@ try {
     const limit = parseFloat(cat.monthly_limit);
     const remaining = Math.max(0, limit - spent);
     const percentage = limit > 0 ? Math.min(Math.round((spent / limit) * 100), 100) : 0;
-    const isExceeded = spent >= limit;
-    const isNearLimit = !isExceeded && spent >= limit * 0.85;
 
-    categoriesView.push({
-      id: cat.id,
-      name: cat.name,
-      monthlyLimitHnl: limit,
-      currentSpentHnl: spent,
-      remainingHnl: remaining,
-      percentage,
-      isExceeded,
-      isNearLimit,
-      progressColor: isExceeded ? 'progress-error' : isNearLimit ? 'progress-warning' : 'progress-primary',
-      badgeColor: isExceeded ? 'badge-error text-white' : isNearLimit ? 'badge-warning' : 'badge-ghost',
-    });
+    // Clasificación de color según requerimiento:
+    // > 85%: progress-error | > 60%: progress-warning | < 60%: progress-success
+    let progressClass = 'progress-success';
+    let badgeClass = 'badge-success text-white';
 
-    totalBudgetHnl += limit;
-    totalSpentHnl += spent;
-  }
-
-  // 2. Obtener pagos programados
-  const rawPayments = await db
-    .select()
-    .from(schema.scheduled_payments)
-    .where(eq(schema.scheduled_payments.is_paid, false))
-    .orderBy(asc(schema.scheduled_payments.due_date))
-    .limit(10);
-
-  upcomingPaymentsView = rawPayments.map((p) => {
-    const dueDate = new Date(p.due_date);
-    const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    const currency = p.currency || 'HNL';
-    const rawAmount = parseFloat(p.amount);
-    const amountInHnl = currency === 'USD' ? rawAmount * LIVE_USD_RATE : rawAmount;
-
-    let formattedAmount = '';
-    let equivalentAmount = '';
-
-    if (currency === 'USD') {
-      formattedAmount = `$${rawAmount.toFixed(2)} USD`;
-      equivalentAmount = `~L. ${amountInHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`;
-    } else {
-      formattedAmount = `L. ${rawAmount.toLocaleString('es-HN', { minimumFractionDigits: 2 })}`;
-      equivalentAmount = `~$${(rawAmount / LIVE_USD_RATE).toFixed(2)} USD`;
+    if (percentage > 85) {
+      progressClass = 'progress-error';
+      badgeClass = 'badge-error text-white font-bold';
+    } else if (percentage > 60) {
+      progressClass = 'progress-warning';
+      badgeClass = 'badge-warning text-neutral font-semibold';
     }
 
-    return {
-      id: p.id,
-      title: p.title,
-      amount: rawAmount.toFixed(2),
-      currency,
-      amountInHnl,
-      formattedAmount,
-      equivalentAmount,
-      formattedDate: dueDate.toLocaleDateString('es-HN', { day: 'numeric', month: 'short' }),
-      isPaid: p.is_paid,
-      daysRemaining: diffDays,
-      isUrgent: diffDays <= 1,
-      isDay20: dueDate.getDate() === 20,
-    };
-  });
+    const isLeak = cat.name.toLowerCase().includes('suscrip') || cat.name.toLowerCase().includes('hormiga');
 
-  // 3. Obtener transacciones recientes con detalle bimoneda
+    categoriesList.push({
+      id: cat.id,
+      name: cat.name,
+      monthlyLimit: limit,
+      currentSpent: spent,
+      remaining,
+      percentage,
+      progressClass,
+      badgeClass,
+      icon: cat.icon || '📌',
+      isLeakWarning: isLeak,
+    });
+
+    totalBudget += limit;
+    totalSpent += spent;
+  }
+
+  // 2. Transacciones recientes
   const rawTransactions = await db
     .select({
       id: schema.transactions.id,
       amount: schema.transactions.amount,
-      currency: schema.transactions.currency,
-      originalAmount: schema.transactions.original_amount,
-      exchangeRate: schema.transactions.exchange_rate,
       description: schema.transactions.description,
       date: schema.transactions.date,
       categoryName: schema.categories.name,
+      icon: schema.categories.icon,
     })
     .from(schema.transactions)
     .leftJoin(schema.categories, eq(schema.transactions.category_id, schema.categories.id))
     .orderBy(desc(schema.transactions.date))
     .limit(5);
 
-  recentTransactionsView = rawTransactions.map((t) => {
-    const isUsd = t.currency === 'USD';
-    const orig = t.originalAmount ? parseFloat(t.originalAmount).toFixed(2) : parseFloat(t.amount).toFixed(2);
-    const dateObj = new Date(t.date);
-
-    return {
-      id: t.id,
-      description: t.description || 'Sin concepto',
-      categoryName: t.categoryName || 'General',
-      amountHnl: parseFloat(t.amount).toLocaleString('es-HN', { minimumFractionDigits: 2 }),
-      currency: t.currency,
-      originalAmount: orig,
-      exchangeRate: parseFloat(t.exchangeRate || '1').toFixed(2),
-      isUsd,
-      dateFormatted: dateObj.toLocaleDateString('es-HN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
-    };
-  });
-} catch (error: any) {
+  recentTransactions = rawTransactions.map((t) => ({
+    id: t.id,
+    amount: parseFloat(t.amount).toFixed(2),
+    description: t.description || 'Gasto registrado',
+    categoryName: t.categoryName || 'General',
+    icon: t.icon || '🏷️',
+    formattedDate: new Date(t.date).toLocaleDateString('es-HN', { day: 'numeric', month: 'short' }),
+  }));
+} catch (error) {
   dbConfigured = false;
-  errorMessage = error.message || 'No se pudo conectar a la base de datos Neon.';
-
-  // Fallback demo con datos en Lempiras y conversiones en USD
-  categoriesView = [
+  // Datos representativos iniciales si la DB aún no ha sido migrada
+  categoriesList = [
     {
       id: 1,
-      name: 'Supermercado y Alimentación',
-      monthlyLimitHnl: 9000.0,
-      currentSpentHnl: 6250.0,
-      remainingHnl: 2750.0,
-      percentage: 69,
-      isExceeded: false,
-      isNearLimit: false,
-      progressColor: 'progress-primary',
-      badgeColor: 'badge-ghost',
-    },
-    {
-      id: 2,
-      name: 'Transporte y Combustible',
-      monthlyLimitHnl: 3500.0,
-      currentSpentHnl: 3150.0,
-      remainingHnl: 350.0,
+      name: 'Suscripciones & Software',
+      monthlyLimit: 1200.0,
+      currentSpent: 1080.0,
+      remaining: 120.0,
       percentage: 90,
-      isExceeded: false,
-      isNearLimit: true,
-      progressColor: 'progress-warning',
-      badgeColor: 'badge-warning',
-    },
-    {
-      id: 3,
-      name: 'Servicios del Hogar',
-      monthlyLimitHnl: 3200.0,
-      currentSpentHnl: 1800.0,
-      remainingHnl: 1400.0,
-      percentage: 56,
-      isExceeded: false,
-      isNearLimit: false,
-      progressColor: 'progress-primary',
-      badgeColor: 'badge-ghost',
-    },
-  ];
-  totalBudgetHnl = 15700;
-  totalSpentHnl = 11200;
-
-  upcomingPaymentsView = [
-    {
-      id: 1,
-      title: 'Internet Fibra Residencial',
-      amount: '950.00',
-      currency: 'HNL',
-      amountInHnl: 950.0,
-      formattedAmount: 'L. 950.00',
-      equivalentAmount: `~$${(950 / LIVE_USD_RATE).toFixed(2)} USD`,
-      formattedDate: 'En 1 día',
-      isPaid: false,
-      daysRemaining: 1,
-      isUrgent: true,
-      isDay20: false,
+      progressClass: 'progress-error',
+      badgeClass: 'badge-error text-white font-bold',
+      icon: '💻',
+      isLeakWarning: true,
     },
     {
       id: 2,
-      title: 'Suscripción Software (USD)',
-      amount: '22.99',
-      currency: 'USD',
-      amountInHnl: 22.99 * LIVE_USD_RATE,
-      formattedAmount: '$22.99 USD',
-      equivalentAmount: `~L. ${(22.99 * LIVE_USD_RATE).toFixed(2)}`,
-      formattedDate: 'En 2 días',
-      isPaid: false,
-      daysRemaining: 2,
-      isUrgent: false,
-      isDay20: false,
+      name: 'Gastos Hormiga (Café/Snacks)',
+      monthlyLimit: 1500.0,
+      currentSpent: 990.0,
+      remaining: 510.0,
+      percentage: 66,
+      progressClass: 'progress-warning',
+      badgeClass: 'badge-warning text-neutral font-semibold',
+      icon: '🐜',
+      isLeakWarning: true,
     },
     {
       id: 3,
-      title: 'Tarjeta de Crédito (Corte día 20)',
-      amount: '3500.00',
-      currency: 'HNL',
-      amountInHnl: 3500.0,
-      formattedAmount: 'L. 3,500.00',
-      equivalentAmount: `~$${(3500 / LIVE_USD_RATE).toFixed(2)} USD`,
-      formattedDate: 'Día 20',
-      isPaid: false,
-      daysRemaining: 5,
-      isUrgent: false,
-      isDay20: true,
-    },
-  ];
-
-  recentTransactionsView = [
-    {
-      id: 1,
-      description: 'Compra en Amazon (Demo)',
-      categoryName: 'Supermercado y Alimentación',
-      amountHnl: (35.00 * LIVE_USD_RATE).toFixed(2),
-      currency: 'USD',
-      originalAmount: '35.00',
-      exchangeRate: LIVE_USD_RATE.toFixed(2),
-      isUsd: true,
-      dateFormatted: 'Hoy, 09:30',
+      name: 'Básico y Supermercado',
+      monthlyLimit: 7500.0,
+      currentSpent: 3200.0,
+      remaining: 4300.0,
+      percentage: 42,
+      progressClass: 'progress-success',
+      badgeClass: 'badge-success text-white',
+      icon: '🛒',
+      isLeakWarning: false,
     },
     {
-      id: 2,
-      description: 'Gasolina Puma',
-      categoryName: 'Transporte y Combustible',
-      amountHnl: '850.00',
-      currency: 'HNL',
-      originalAmount: '850.00',
-      exchangeRate: '1.00',
-      isUsd: false,
-      dateFormatted: 'Ayer, 18:15',
+      id: 4,
+      name: 'Transporte y Gasolina',
+      monthlyLimit: 3000.0,
+      currentSpent: 1650.0,
+      remaining: 1350.0,
+      percentage: 55,
+      progressClass: 'progress-success',
+      badgeClass: 'badge-success text-white',
+      icon: '⛽',
+      isLeakWarning: false,
     },
   ];
+  totalBudget = 13200.0;
+  totalSpent = 6920.0;
 }
 
-const overallPercentage = totalBudgetHnl > 0 ? Math.min(Math.round((totalSpentHnl / totalBudgetHnl) * 100), 100) : 0;
-const currentMonthName = new Date().toLocaleDateString('es-HN', { month: 'long', year: 'numeric' });
-const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
+const currentMonthLabel = now.toLocaleDateString('es-HN', { month: 'long', year: 'numeric' });
+const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
 ---
 
-<Layout title="Dashboard de Gastos en Lempiras y Dólares">
-  <!-- Barra de Tasa de Cambio en Tiempo Real -->
-  <div class="bg-base-200 border border-base-300 rounded-2xl p-2.5 mb-5 flex items-center justify-between text-xs shadow-inner">
-    <div class="flex items-center gap-2">
-      <span class="relative flex h-2.5 w-2.5">
-        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-success"></span>
-      </span>
-      <span class="font-bold text-neutral">Tasa en tiempo real:</span>
-      <span class="badge badge-success text-white font-extrabold text-xs">
-        1 USD = L. {LIVE_USD_RATE.toFixed(2)} HNL
-      </span>
-    </div>
-    <button
-      id="btn-refresh-rate"
-      type="button"
-      title="Actualizar tasa de cambio en vivo"
-      class="btn btn-ghost btn-xs text-base-content/70 hover:text-primary gap-1"
-    >
-      <svg id="rate-refresh-icon" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-      <span class="text-[10px]">Actualizar</span>
-    </button>
-  </div>
-
-  <!-- Banner Informativo de Conexión a Base de Datos si no está configurada -->
-  {!dbConfigured && (
-    <div class="alert alert-warning shadow-lg mb-6 text-sm">
-      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+<Layout title="Control CRONOS">
+  <!-- ALERTA PROACTIVA OBLIGATORIA (Días 17 al 20) -->
+  {isDebtAlertActive && (
+    <div class="alert alert-warning shadow-lg mb-4 flex items-start gap-2.5 border-l-4 border-amber-600 animate-pulse">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6 text-amber-900 mt-0.5" fill="none" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
       <div>
-        <p class="font-bold">Modo de Demostración (Datos en Lempiras)</p>
-        <p class="text-xs opacity-90">Configura <code class="badge badge-sm font-mono">DATABASE_URL</code> en <code class="badge badge-sm font-mono">.env</code> para sincronizar con tu base de datos Neon.</p>
+        <h4 class="font-extrabold text-sm text-amber-950">¡Compromiso Crítico!</h4>
+        <p class="text-xs text-amber-900 font-semibold leading-snug">
+          ¡Atención! Separa L. 4,400 para tarjetas/préstamo el día 20.
+        </p>
       </div>
     </div>
   )}
 
-  <!-- 1. Tarjeta Resumen General en Lempiras con Equivalente en USD -->
-  <section class="card bg-gradient-to-br from-primary to-emerald-800 text-primary-content shadow-xl mb-6 overflow-hidden">
-    <div class="card-body p-5">
+  <!-- Banner Informativo de Conexión a Neon si no está conectada -->
+  {!dbConfigured && (
+    <div class="alert alert-info shadow-sm mb-4 text-xs py-2">
+      <span>💡 Modo local de demostración. Configura <code class="font-bold">DATABASE_URL</code> en <code class="font-bold">.env</code> para sincronizar con Neon.</span>
+    </div>
+  )}
+
+  <!-- Tarjeta Resumen Financiero: Salario & Control Global -->
+  <section class="card bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 text-white shadow-xl mb-5 border border-blue-900/40">
+    <div class="card-body p-4.5">
       <div class="flex justify-between items-start">
         <div>
-          <span class="text-xs uppercase tracking-wider font-semibold opacity-85">Presupuesto Mensual</span>
-          <h2 class="text-3xl font-black mt-1 tracking-tight">
-            L. {totalSpentHnl.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            <span class="text-xs font-normal opacity-80 block sm:inline">
-              / L. {totalBudgetHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
-            </span>
+          <span class="text-[11px] font-bold tracking-wider text-blue-300 uppercase">Salario Mensual</span>
+          <h2 class="text-2xl font-black tracking-tight text-white mt-0.5">
+            L. {MONTHLY_SALARY.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
           </h2>
-          <p class="text-xs text-primary-content/80 mt-1">
-            Equivalente: ${(totalSpentHnl / LIVE_USD_RATE).toFixed(2)} / ${(totalBudgetHnl / LIVE_USD_RATE).toFixed(2)} USD
-          </p>
         </div>
-        <div class="radial-progress bg-primary-content/10 text-primary-content text-xs font-bold shrink-0" style={`--value:${overallPercentage}; --size:3.2rem; --thickness:4px;`} role="progressbar">
-          {overallPercentage}%
+        <div class="badge badge-primary font-bold text-xs py-2 px-2.5">
+          {currentMonthLabel}
         </div>
       </div>
 
-      <div class="w-full bg-black/20 rounded-full h-2.5 mt-3 overflow-hidden">
-        <div 
-          class="bg-white h-2.5 rounded-full transition-all duration-500 ease-out" 
-          style={`width: ${overallPercentage}%`}
-        ></div>
+      <!-- Métricas Clave -->
+      <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/10 text-xs">
+        <div class="bg-white/5 p-2 rounded-xl">
+          <span class="text-white/60 block text-[10px]">Deuda Fija (Día 20):</span>
+          <span class="font-bold text-amber-400">L. {FIXED_DEBT_AMOUNT.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div class="bg-white/5 p-2 rounded-xl">
+          <span class="text-white/60 block text-[10px]">Gastado en el Mes:</span>
+          <span class="font-bold text-rose-400">L. {totalSpent.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
+        </div>
       </div>
 
-      <div class="flex justify-between items-center text-xs opacity-90 mt-2 font-medium">
-        <span>Disponible: L. {totalRemainingHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
-        <span class="capitalize">{currentMonthName}</span>
+      <div class="mt-2 text-center text-[11px] text-blue-200/80 font-medium">
+        Saldo Libre Real Estimado: <strong class="text-white font-extrabold">L. {disposableSalary.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</strong>
       </div>
     </div>
   </section>
 
-  <!-- 2. Comparativa: Gasto vs Límite Mensual en Lempiras -->
+  <!-- Dashboard de Categorías con Barras de Progreso DaisyUI -->
   <section class="mb-6">
     <div class="flex justify-between items-center mb-3">
-      <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
-        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-        Límites por Categoría (Lps)
+      <h3 class="font-extrabold text-sm text-neutral flex items-center gap-1.5 uppercase tracking-wide">
+        🛡️ Categorías & Bloqueos Duros
       </h3>
-      <span class="text-xs text-base-content/60 font-medium">{categoriesView.length} categorías</span>
+      <span class="text-[11px] text-base-content/60 font-semibold">{categoriesList.length} Categorías</span>
     </div>
 
     <div class="space-y-3">
-      {categoriesView.map((cat) => (
-        <div class="card bg-base-100 border border-base-200 shadow-sm p-3.5 hover:shadow-md transition-shadow">
+      {categoriesList.map((cat) => (
+        <div class="card bg-base-100 border border-base-200 shadow-sm p-3.5 hover:border-primary/40 transition-all">
           <div class="flex justify-between items-center mb-1.5">
-            <span class="font-bold text-sm text-neutral">{cat.name}</span>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[11px] text-base-content/50 font-medium">
-                ~${(cat.currentSpentHnl / LIVE_USD_RATE).toFixed(0)} / ${(cat.monthlyLimitHnl / LIVE_USD_RATE).toFixed(0)} USD
-              </span>
-              <span class={`badge badge-sm font-semibold ${cat.badgeColor}`}>
-                {cat.percentage}%
-              </span>
+            <div class="flex items-center gap-2">
+              <span class="text-lg">{cat.icon}</span>
+              <div>
+                <span class="font-bold text-sm text-neutral block leading-tight">{cat.name}</span>
+                {cat.isLeakWarning && (
+                  <span class="badge badge-outline badge-error text-[9px] py-0 px-1 font-bold">Fuga Detectada</span>
+                )}
+              </div>
             </div>
+            <span class={`badge badge-sm ${cat.badgeClass}`}>
+              {cat.percentage}%
+            </span>
           </div>
 
-          <!-- Barra de Progreso DaisyUI -->
+          <!-- Barra de Progreso DaisyUI con Reglas de Negocio -->
+          <!-- > 85%: progress-error | > 60%: progress-warning | < 60%: progress-success -->
           <progress
-            class={`progress ${cat.progressColor} w-full h-2.5`}
-            value={cat.currentSpentHnl}
-            max={cat.monthlyLimitHnl}
+            class={`progress ${cat.progressClass} w-full h-2.5 my-1`}
+            value={cat.currentSpent}
+            max={cat.monthlyLimit}
           ></progress>
 
-          <div class="flex justify-between items-center text-xs mt-1.5 text-base-content/70">
-            <span>Gastado: <strong class="text-neutral font-semibold">L. {cat.currentSpentHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</strong></span>
-            <span>Límite: <span class="font-medium">L. {cat.monthlyLimitHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span></span>
+          <div class="flex justify-between items-center text-xs text-base-content/70 font-medium mt-0.5">
+            <span>Gastado: <strong class="text-neutral font-bold">L. {cat.currentSpent.toFixed(2)}</strong></span>
+            <span>Límite: L. {cat.monthlyLimit.toFixed(2)}</span>
           </div>
 
-          {cat.isExceeded && (
-            <p class="text-[11px] text-error font-semibold mt-1 flex items-center gap-1">
-              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-              </svg>
-              ¡Límite mensual alcanzado o superado!
-            </p>
+          {cat.percentage >= 100 && (
+            <div class="text-[10px] text-error font-extrabold mt-1.5 flex items-center gap-1 bg-error/10 p-1 rounded-lg">
+              🛑 <span>Hard Stop Activo: No se permiten más gastos en esta categoría.</span>
+            </div>
           )}
         </div>
       ))}
     </div>
   </section>
 
-  <!-- 3. Formulario para Registrar Nuevo Gasto con Conversión en Vivo -->
-  <section class="card bg-base-100 border border-base-200 shadow-md mb-6">
-    <div class="card-body p-5">
-      <div class="flex justify-between items-center mb-2">
-        <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
-          <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          Registrar Transacción
-        </h3>
-        <span class="badge badge-primary badge-outline badge-sm text-[11px] font-semibold">Conversión en vivo</span>
-      </div>
-
-      <!-- Selector de Moneda (Tabs) -->
-      <div class="flex bg-base-200 p-1 rounded-xl mb-3 gap-1">
-        <button
-          type="button"
-          id="btn-currency-hnl"
-          class="btn btn-sm flex-1 font-bold btn-primary text-white normal-case shadow-sm"
-        >
-          🇭🇳 Lempiras (Lps)
-        </button>
-        <button
-          type="button"
-          id="btn-currency-usd"
-          class="btn btn-sm flex-1 font-bold btn-ghost text-neutral normal-case"
-        >
-          🇺🇸 Dólares ($ USD)
-        </button>
-      </div>
-
-      <!-- Alerta dinámica -->
-      <div id="form-alert" class="hidden mb-3"></div>
-
-      <form id="transaction-form" class="space-y-3">
-        <input type="hidden" id="selected_currency" name="currency" value="HNL" />
-
-        <!-- Selector de Categoría -->
-        <div class="form-control">
-          <label class="label py-1">
-            <span class="label-text text-xs font-semibold">Categoría de Gasto</span>
-          </label>
-          <select id="category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100 font-medium">
-            <option value="" disabled selected>Selecciona una categoría...</option>
-            {categoriesView.map((c) => (
-              <option value={c.id} data-limit={c.monthlyLimitHnl} data-spent={c.currentSpentHnl} data-remaining={c.remainingHnl}>
-                {c.name} (Límite: L. {c.monthlyLimitHnl.toLocaleString('es-HN', { minimumFractionDigits: 2 })})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <!-- Monto -->
-        <div class="form-control">
-          <div class="flex justify-between items-center py-1">
-            <label class="label-text text-xs font-semibold">Monto del Gasto</label>
-            <span id="currency-indicator" class="text-[11px] text-base-content/60 font-medium">
-              Moneda: Lempiras (L.)
-            </span>
+  <!-- Historial Reciente de Gastos -->
+  {recentTransactions.length > 0 && (
+    <section class="mb-4">
+      <h3 class="font-extrabold text-sm text-neutral flex items-center gap-1.5 uppercase tracking-wide mb-2.5">
+        ⏱️ Últimos Movimientos
+      </h3>
+      <div class="space-y-2">
+        {recentTransactions.map((item) => (
+          <div class="card bg-base-100 border border-base-200 shadow-sm p-2.5 flex flex-row items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <span class="text-base">{item.icon}</span>
+              <div>
+                <p class="font-bold text-xs text-neutral leading-tight">{item.description}</p>
+                <p class="text-[10px] text-base-content/60">{item.categoryName} • {item.formattedDate}</p>
+              </div>
+            </div>
+            <span class="font-extrabold text-xs text-neutral">L. {item.amount}</span>
           </div>
-          <div class="relative">
-            <span id="currency-prefix" class="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-primary">
-              L.
-            </span>
+        ))}
+      </div>
+    </section>
+  )}
+
+  <!-- Floating Action Button (FAB) Fijo Abajo a la Derecha -->
+  <button
+    id="btn-open-fab"
+    type="button"
+    class="btn btn-circle btn-primary shadow-2xl fixed bottom-6 right-6 z-40 text-white text-2xl font-black hover:scale-110 active:scale-95 transition-transform"
+    title="Registrar Gasto Rápido"
+  >
+    +
+  </button>
+
+  <!-- Dialog / Bottom Sheet Modal de DaisyUI -->
+  <dialog id="modal_quick_expense" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box p-5 bg-base-100 max-w-md mx-auto">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="font-black text-base text-neutral flex items-center gap-1.5">
+          ⚡ Registrar Gasto Rápido
+        </h3>
+        <form method="dialog">
+          <button class="btn btn-sm btn-circle btn-ghost text-base-content/60">✕</button>
+        </form>
+      </div>
+
+      <form id="cronos-transaction-form" class="space-y-4">
+        <!-- Input de Número Gigante -->
+        <div class="form-control text-center py-2">
+          <label class="label-text text-xs text-base-content/60 uppercase font-bold tracking-wider mb-1 block">
+            Monto a Registrar
+          </label>
+          <div class="flex items-center justify-center">
+            <span class="text-3xl font-black text-primary mr-1">L.</span>
             <input
               type="number"
-              id="amount"
+              id="quick_amount"
               name="amount"
               step="0.01"
               min="0.01"
               placeholder="0.00"
               required
-              class="input input-bordered input-sm w-full pl-8 font-bold text-neutral text-base"
+              class="text-4xl text-center font-black input input-ghost w-48 border-b-2 border-primary focus:outline-none focus:border-primary text-neutral"
             />
           </div>
+        </div>
 
-          <!-- Tarjeta de Conversión en Tiempo Real -->
-          <div id="conversion-card" class="bg-primary/5 border border-primary/20 rounded-xl p-2.5 mt-2 hidden">
-            <div class="flex justify-between items-center">
-              <span class="text-xs font-semibold text-neutral">Conversión a Lempiras:</span>
-              <span id="live-conversion-amount" class="text-sm font-black text-primary">L. 0.00</span>
-            </div>
-            <div class="flex justify-between items-center text-[11px] text-base-content/60 mt-1">
-              <span>Tasa aplicada: 1 USD = L. <span id="display-rate">{LIVE_USD_RATE.toFixed(2)}</span></span>
-              <button type="button" id="btn-toggle-custom-rate" class="link link-primary text-[10px]">Ajustar tasa bancaria</button>
-            </div>
-
-            <!-- Campo opcional para ajustar la tasa bancaria si el usuario lo desea -->
-            <div id="custom-rate-container" class="mt-2 pt-2 border-t border-primary/10 hidden">
-              <label class="label-text text-[10px] block mb-1">Tasa de cambio personalizada (opcional):</label>
-              <div class="flex items-center gap-2">
-                <input
-                  type="number"
-                  id="custom-exchange-rate"
-                  step="0.01"
-                  min="1"
-                  value={LIVE_USD_RATE.toFixed(2)}
-                  class="input input-bordered input-xs w-28 font-semibold"
-                />
-                <button type="button" id="btn-reset-rate" class="btn btn-ghost btn-xs text-[10px]">Restablecer</button>
-              </div>
-            </div>
-
-            <!-- Impacto en presupuesto en tiempo real -->
-            <div id="budget-impact-message" class="text-[11px] mt-1.5 pt-1.5 border-t border-primary/10 font-medium"></div>
-          </div>
+        <!-- Selector de Categorías -->
+        <div class="form-control">
+          <label class="label py-1">
+            <span class="label-text text-xs font-bold">Categoría</span>
+          </label>
+          <select id="quick_category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100 font-semibold">
+            <option value="" disabled selected>Selecciona categoría...</option>
+            {categoriesList.map((c) => (
+              <option value={c.id}>
+                {c.icon} {c.name} (Disponible: L. {c.remaining.toFixed(2)})
+              </option>
+            ))}
+          </select>
         </div>
 
         <!-- Descripción -->
         <div class="form-control">
           <label class="label py-1">
-            <span class="label-text text-xs font-semibold">Descripción (Opcional)</span>
+            <span class="label-text text-xs font-bold">Descripción</span>
           </label>
           <input
             type="text"
-            id="description"
+            id="quick_description"
             name="description"
-            placeholder="Ej. Compra en Amazon, Netflix, Supermercado..."
-            class="input input-bordered input-sm w-full"
+            placeholder="Ej. Café, suscripción, almuerzo..."
+            class="input input-bordered input-sm w-full font-medium"
           />
         </div>
 
         <!-- Botón de Envío -->
         <button
           type="submit"
-          id="submit-btn"
-          class="btn btn-primary btn-sm w-full mt-2 font-bold normal-case text-white shadow-md"
+          id="btn-submit-quick"
+          class="btn btn-primary btn-block font-extrabold normal-case text-white text-sm mt-3 shadow-lg"
         >
-          <span id="btn-text">Guardar Gasto</span>
-          <span id="btn-spinner" class="loading loading-spinner loading-xs hidden"></span>
+          <span id="btn-quick-text">Aplicar Gasto</span>
+          <span id="btn-quick-spinner" class="loading loading-spinner loading-xs hidden"></span>
         </button>
       </form>
     </div>
-  </section>
-
-  <!-- 4. Últimos Movimientos con Desglose Bimoneda -->
-  <section class="mb-6">
-    <div class="flex justify-between items-center mb-3">
-      <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
-        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-        Últimos Gastos Registrados
-      </h3>
-      <span class="text-xs text-base-content/60 font-medium">{recentTransactionsView.length} recientes</span>
-    </div>
-
-    {recentTransactionsView.length === 0 ? (
-      <div class="card bg-base-100 border border-base-200 p-6 text-center text-xs text-base-content/60">
-        Aún no has registrado transacciones este mes.
-      </div>
-    ) : (
-      <div class="space-y-2.5">
-        {recentTransactionsView.map((t) => (
-          <div class="card bg-base-100 border border-base-200 shadow-sm p-3 flex flex-row items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <div class={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${t.isUsd ? 'bg-info/15 text-info' : 'bg-primary/15 text-primary'}`}>
-                {t.isUsd ? '$' : 'L.'}
-              </div>
-              <div>
-                <h4 class="font-bold text-sm text-neutral leading-tight">
-                  {t.description}
-                </h4>
-                <div class="flex items-center gap-2 mt-0.5">
-                  <span class="badge badge-ghost badge-xs">{t.categoryName}</span>
-                  <span class="text-[11px] text-base-content/50">{t.dateFormatted}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="text-right">
-              {t.isUsd ? (
-                <div>
-                  <span class="font-black text-sm text-info block">${t.originalAmount} USD</span>
-                  <span class="text-[11px] font-semibold text-neutral block">➔ L. {t.amountHnl}</span>
-                  <span class="text-[9px] text-base-content/50 block">Tasa: {t.exchangeRate}</span>
-                </div>
-              ) : (
-                <div>
-                  <span class="font-black text-sm text-neutral block">L. {t.amountHnl}</span>
-                  <span class="text-[10px] text-base-content/50 block">HNL</span>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    )}
-  </section>
-
-  <!-- 5. Próximos Pagos Programados (Lps & USD) -->
-  <section class="mb-4">
-    <div class="flex justify-between items-center mb-3">
-      <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
-        <svg class="w-4 h-4 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        Próximos Pagos Programados
-      </h3>
-      <a href="/api/cron/reminders" target="_blank" class="text-xs text-primary font-medium hover:underline">
-        Probar Cron ↗
-      </a>
-    </div>
-
-    {upcomingPaymentsView.length === 0 ? (
-      <div class="card bg-base-100 border border-base-200 p-6 text-center text-xs text-base-content/60">
-        No hay pagos programados pendientes.
-      </div>
-    ) : (
-      <div class="space-y-2.5">
-        {upcomingPaymentsView.map((payment) => (
-          <div class="card bg-base-100 border border-base-200 shadow-sm p-3 flex flex-row items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <div class={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${payment.isUrgent ? 'bg-error/15 text-error' : 'bg-warning/15 text-warning'}`}>
-                📅
-              </div>
-              <div>
-                <h4 class="font-bold text-sm text-neutral leading-tight flex items-center gap-1.5">
-                  {payment.title}
-                  {payment.isDay20 && (
-                    <span class="badge badge-accent badge-outline badge-xs font-semibold">
-                      Día 20
-                    </span>
-                  )}
-                  {payment.currency === 'USD' && (
-                    <span class="badge badge-info badge-outline badge-xs font-semibold">
-                      USD
-                    </span>
-                  )}
-                </h4>
-                <p class="text-xs text-base-content/60 mt-0.5">
-                  {payment.formattedDate}
-                  {payment.isUrgent ? (
-                    <span class="text-error font-bold ml-1">• Vence pronto</span>
-                  ) : (
-                    <span class="ml-1">• en {payment.daysRemaining} días</span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            <div class="text-right">
-              <span class="font-black text-sm text-neutral block">
-                {payment.formattedAmount}
-              </span>
-              <span class="text-[11px] text-base-content/50 block font-medium">
-                {payment.equivalentAmount}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    )}
-  </section>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
 </Layout>
 
 <script>
-  let currentLiveRate = 26.83; // Tasa por defecto inicial
+  // Control del Dialog / Bottom Sheet Modal
+  const modal = document.getElementById('modal_quick_expense') as HTMLDialogElement;
+  const btnOpenFab = document.getElementById('btn-open-fab') as HTMLButtonElement;
+  const form = document.getElementById('cronos-transaction-form') as HTMLFormElement;
+  const amountInput = document.getElementById('quick_amount') as HTMLInputElement;
+  const categorySelect = document.getElementById('quick_category_id') as HTMLSelectElement;
+  const descriptionInput = document.getElementById('quick_description') as HTMLInputElement;
+  const btnSubmit = document.getElementById('btn-submit-quick') as HTMLButtonElement;
+  const btnText = document.getElementById('btn-quick-text') as HTMLSpanElement;
+  const btnSpinner = document.getElementById('btn-quick-spinner') as HTMLSpanElement;
+  const toastContainer = document.getElementById('toast-container') as HTMLDivElement;
 
-  // Elementos UI
-  const btnHnl = document.getElementById('btn-currency-hnl') as HTMLButtonElement;
-  const btnUsd = document.getElementById('btn-currency-usd') as HTMLButtonElement;
-  const selectedCurrencyInput = document.getElementById('selected_currency') as HTMLInputElement;
-  const currencyPrefix = document.getElementById('currency-prefix') as HTMLSpanElement;
-  const currencyIndicator = document.getElementById('currency-indicator') as HTMLSpanElement;
-  const amountInput = document.getElementById('amount') as HTMLInputElement;
-  const categorySelect = document.getElementById('category_id') as HTMLSelectElement;
+  btnOpenFab?.addEventListener('click', () => {
+    modal.showModal();
+    setTimeout(() => amountInput?.focus(), 150);
+  });
 
-  const conversionCard = document.getElementById('conversion-card') as HTMLDivElement;
-  const liveConversionAmount = document.getElementById('live-conversion-amount') as HTMLSpanElement;
-  const displayRateSpan = document.getElementById('display-rate') as HTMLSpanElement;
-  const customRateContainer = document.getElementById('custom-rate-container') as HTMLDivElement;
-  const customExchangeRateInput = document.getElementById('custom-exchange-rate') as HTMLInputElement;
-  const btnToggleCustomRate = document.getElementById('btn-toggle-custom-rate') as HTMLButtonElement;
-  const btnResetRate = document.getElementById('btn-reset-rate') as HTMLButtonElement;
-  const budgetImpactMessage = document.getElementById('budget-impact-message') as HTMLDivElement;
-  const btnRefreshRate = document.getElementById('btn-refresh-rate') as HTMLButtonElement;
-  const rateRefreshIcon = document.getElementById('rate-refresh-icon') as SVGElement;
+  // Mostrar Toast Nativo de DaisyUI
+  function showDaisyToast(message: string, isError: boolean = false) {
+    if (!toastContainer) return;
 
-  // Obtener tasa de cambio en vivo desde la API
-  async function fetchLiveRate() {
-    try {
-      rateRefreshIcon?.classList.add('animate-spin');
-      const res = await fetch('/api/exchange-rate');
-      const data = await res.json();
-      if (data.success && data.rate) {
-        currentLiveRate = data.rate;
-        if (displayRateSpan) displayRateSpan.textContent = currentLiveRate.toFixed(2);
-        if (customExchangeRateInput && !customRateContainer.classList.contains('hidden')) {
-          customExchangeRateInput.value = currentLiveRate.toFixed(2);
-        }
-        updateConversionAndBudgetImpact();
-      }
-    } catch (e) {
-      console.warn('Error al obtener tasa en vivo:', e);
-    } finally {
-      setTimeout(() => {
-        rateRefreshIcon?.classList.remove('animate-spin');
-      }, 500);
-    }
+    const toastDiv = document.createElement('div');
+    toastDiv.className = `alert ${isError ? 'alert-error text-white' : 'alert-success text-white'} shadow-2xl text-xs font-extrabold flex items-center gap-2 pointer-events-auto transition-all animate-bounce`;
+    toastDiv.innerHTML = `
+      <span>${isError ? '🛑' : '✅'}</span>
+      <span>${message}</span>
+    `;
+
+    toastContainer.appendChild(toastDiv);
+
+    setTimeout(() => {
+      toastDiv.classList.remove('animate-bounce');
+      toastDiv.classList.add('opacity-0', 'scale-90');
+      setTimeout(() => toastDiv.remove(), 300);
+    }, 3500);
   }
 
-  function getEffectiveRate(): number {
-    if (!customRateContainer?.classList.contains('hidden') && customExchangeRateInput) {
-      const custom = parseFloat(customExchangeRateInput.value);
-      if (!isNaN(custom) && custom > 0) return custom;
-    }
-    return currentLiveRate;
-  }
+  // Envío del Formulario
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
 
-  function updateCurrency(curr: 'HNL' | 'USD') {
-    selectedCurrencyInput.value = curr;
-    if (curr === 'HNL') {
-      btnHnl.className = 'btn btn-sm flex-1 font-bold btn-primary text-white normal-case shadow-sm';
-      btnUsd.className = 'btn btn-sm flex-1 font-bold btn-ghost text-neutral normal-case';
-      currencyPrefix.textContent = 'L.';
-      currencyIndicator.textContent = 'Moneda: Lempiras (L.)';
-      conversionCard.classList.add('hidden');
-    } else {
-      btnUsd.className = 'btn btn-sm flex-1 font-bold btn-primary text-white normal-case shadow-sm';
-      btnHnl.className = 'btn btn-sm flex-1 font-bold btn-ghost text-neutral normal-case';
-      currencyPrefix.textContent = '$';
-      currencyIndicator.textContent = 'Moneda: Dólares ($ USD)';
-      conversionCard.classList.remove('hidden');
-    }
-    updateConversionAndBudgetImpact();
-  }
+    const amount = parseFloat(amountInput.value);
+    const category_id = parseInt(categorySelect.value);
+    const description = descriptionInput.value.trim();
 
-  function updateConversionAndBudgetImpact() {
-    const val = parseFloat(amountInput.value);
-    const isUsd = selectedCurrencyInput.value === 'USD';
-
-    if (isNaN(val) || val <= 0) {
-      if (isUsd) {
-        liveConversionAmount.textContent = 'L. 0.00';
-        budgetImpactMessage.innerHTML = '<span class="text-base-content/50">Ingresa un monto para calcular la conversión.</span>';
-      }
+    if (isNaN(amount) || amount <= 0 || isNaN(category_id)) {
+      showDaisyToast('Por favor completa todos los campos requeridos.', true);
       return;
     }
 
-    const rate = getEffectiveRate();
-    const amountInHnl = isUsd ? val * rate : val;
-
-    if (isUsd) {
-      conversionCard.classList.remove('hidden');
-      liveConversionAmount.textContent = `L. ${amountInHnl.toLocaleString('es-HN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      if (displayRateSpan) displayRateSpan.textContent = rate.toFixed(2);
-    }
-
-    // Impacto en el presupuesto de la categoría seleccionada
-    const selectedOption = categorySelect.options[categorySelect.selectedIndex];
-    if (selectedOption && selectedOption.value) {
-      const limit = parseFloat(selectedOption.dataset.limit || '0');
-      const spent = parseFloat(selectedOption.dataset.spent || '0');
-      const remaining = parseFloat(selectedOption.dataset.remaining || '0');
-      const projected = spent + amountInHnl;
-      const willExceed = projected > limit;
-
-      if (willExceed) {
-        const excess = (projected - limit).toFixed(2);
-        budgetImpactMessage.innerHTML = `
-          <div class="text-error font-bold flex items-center gap-1">
-            ⚠️ <span>¡Alerta! Este gasto superará el límite de la categoría por L. ${excess}.</span>
-          </div>
-        `;
-      } else {
-        const pctImpact = limit > 0 ? ((amountInHnl / limit) * 100).toFixed(1) : '0';
-        const newRemaining = (remaining - amountInHnl).toFixed(2);
-        budgetImpactMessage.innerHTML = `
-          <div class="text-success font-semibold flex items-center gap-1">
-            ✓ <span>Consumirá ${pctImpact}% del límite mensual. Saldo restante: L. ${newRemaining}</span>
-          </div>
-        `;
-      }
-    } else {
-      budgetImpactMessage.innerHTML = '<span class="text-base-content/50">Selecciona una categoría para ver el impacto presupuestario.</span>';
-    }
-  }
-
-  btnHnl?.addEventListener('click', () => updateCurrency('HNL'));
-  btnUsd?.addEventListener('click', () => updateCurrency('USD'));
-  amountInput?.addEventListener('input', updateConversionAndBudgetImpact);
-  categorySelect?.addEventListener('change', updateConversionAndBudgetImpact);
-
-  btnToggleCustomRate?.addEventListener('click', () => {
-    customRateContainer.classList.toggle('hidden');
-    updateConversionAndBudgetImpact();
-  });
-
-  customExchangeRateInput?.addEventListener('input', updateConversionAndBudgetImpact);
-
-  btnResetRate?.addEventListener('click', () => {
-    if (customExchangeRateInput) customExchangeRateInput.value = currentLiveRate.toFixed(2);
-    customRateContainer.classList.add('hidden');
-    updateConversionAndBudgetImpact();
-  });
-
-  btnRefreshRate?.addEventListener('click', fetchLiveRate);
-
-  // Inicializar cargando la tasa en vivo al abrir la aplicación
-  fetchLiveRate();
-
-  // Envío del formulario
-  const form = document.getElementById('transaction-form') as HTMLFormElement;
-  const alertBox = document.getElementById('form-alert') as HTMLDivElement;
-  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
-  const btnText = document.getElementById('btn-text') as HTMLSpanElement;
-  const btnSpinner = document.getElementById('btn-spinner') as HTMLSpanElement;
-
-  function showAlert(message: string, type: 'success' | 'error') {
-    alertBox.className = `alert ${type === 'success' ? 'alert-success text-white' : 'alert-error text-white'} text-xs font-medium shadow-md mb-3 flex items-start gap-2`;
-    alertBox.innerHTML = `
-      <span>${type === 'success' ? '✅' : '❌'}</span>
-      <div>${message}</div>
-    `;
-    alertBox.classList.remove('hidden');
-  }
-
-  function hideAlert() {
-    alertBox.classList.add('hidden');
-  }
-
-  form?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    hideAlert();
-
-    const categoryId = categorySelect.value;
-    const amount = amountInput.value;
-    const description = (document.getElementById('description') as HTMLInputElement).value;
-    const currency = selectedCurrencyInput.value;
-    const rate = getEffectiveRate();
-
-    submitBtn.disabled = true;
-    btnText.textContent = 'Verificando y convirtiendo...';
+    btnSubmit.disabled = true;
+    btnText.textContent = 'Verificando Hard Stop...';
     btnSpinner.classList.remove('hidden');
 
     try {
@@ -867,37 +459,29 @@ const totalRemainingHnl = totalBudgetHnl - totalSpentHnl;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          category_id: categoryId,
-          amount: parseFloat(amount),
-          currency,
-          exchange_rate: rate,
+          amount,
+          category_id,
           description,
         }),
       });
 
-      const result = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        let msg = result.error || 'No fue posible registrar el gasto.';
-        if (result.details) {
-          msg += `<br/><span class="text-[11px] opacity-90 mt-1 block">Límite: ${result.details.monthlyLimit} | Gastado: ${result.details.currentSpent} | Intento: ${result.details.attemptedAmount} | Exceso: ${result.details.exceededBy}</span>`;
-        }
-        showAlert(msg, 'error');
+        // HTTP 400: Límite excedido. Transacción bloqueada.
+        showDaisyToast(data.error || 'Límite excedido. Transacción bloqueada.', true);
       } else {
-        const remaining = result.summary?.remainingBudgetHnl ? `L. ${result.summary.remainingBudgetHnl}` : '';
-        const converted = result.summary?.currency === 'USD' ? ` (L. ${result.summary.amountInHnl} a tasa L. ${result.summary.rateUsed})` : '';
-        showAlert(`¡Gasto registrado con éxito!${converted} Saldo restante: ${remaining}`, 'success');
+        // HTTP 200: Éxito
+        showDaisyToast('Transacción registrada exitosamente.', false);
         form.reset();
-        updateCurrency('HNL');
-        setTimeout(() => {
-          window.location.reload();
-        }, 1200);
+        modal.close();
+        setTimeout(() => window.location.reload(), 1000);
       }
-    } catch (err: any) {
-      showAlert('Error de conexión al enviar la transacción.', 'error');
+    } catch (err) {
+      showDaisyToast('Error de red al procesar transacción.', true);
     } finally {
-      submitBtn.disabled = false;
-      btnText.textContent = 'Guardar Gasto';
+      btnSubmit.disabled = false;
+      btnText.textContent = 'Aplicar Gasto';
       btnSpinner.classList.add('hidden');
     }
   });

@@ -7,23 +7,20 @@ const { title } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="es" data-theme="cartera">
+<html lang="es" data-theme="cronos">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
-    <title>{title} | Mi Cartera</title>
+    <title>{title} | Control CRONOS</title>
     
-    <!-- PWA Primary Color and Meta Tags -->
-    <meta name="theme-color" content="#10b981" />
+    <!-- PWA Settings -->
+    <meta name="theme-color" content="#1a73e8" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Mi Cartera" />
-    <meta name="application-name" content="Mi Cartera" />
-    <meta name="format-detection" content="telephone=no" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <meta name="apple-mobile-web-app-title" content="CRONOS" />
+    <meta name="application-name" content="Control CRONOS" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Google Fonts -->
@@ -36,51 +33,46 @@ const { title } = Astro.props;
       }
     </style>
   </head>
-  <body class="min-h-screen bg-base-200 text-base-content antialiased flex flex-col items-center">
-    <!-- Contenedor Responsivo Mobile-First -->
-    <div class="w-full max-w-xl min-h-screen flex flex-col bg-base-100 shadow-2xl relative">
-      <!-- Navbar Superior Móvil -->
-      <header class="navbar bg-base-100/90 backdrop-blur-md sticky top-0 z-40 border-b border-base-200 px-4">
-        <div class="flex-1 items-center gap-2">
-          <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black shadow-inner">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M21 7.28V5c0-1.1-.9-2-2-2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-2.28c.59-.35 1-.98 1-1.72V9c0-.74-.41-1.37-1-1.72zM20 9v6h-7V9h7zM5 19V5h14v2h-6c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h6v2H5z"/>
-              <circle cx="16" cy="12" r="1.5"/>
-            </svg>
+  <body class="min-h-screen bg-slate-900 text-base-content antialiased flex flex-col items-center justify-start sm:py-4">
+    <!-- Contenedor Estrictamente Mobile-First (max-w-md) -->
+    <div class="w-full max-w-md min-h-screen sm:min-h-[92vh] sm:rounded-3xl flex flex-col bg-base-100 shadow-2xl relative overflow-x-hidden border border-slate-800/40">
+      
+      <!-- Header Mobile-First -->
+      <header class="navbar bg-base-100/95 backdrop-blur-md sticky top-0 z-40 border-b border-base-200 px-4 py-2">
+        <div class="flex-1 items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center font-black shadow-md shadow-primary/30">
+            ⏳
           </div>
           <div>
-            <h1 class="font-extrabold text-lg tracking-tight leading-none text-neutral">Mi Cartera</h1>
-            <span class="text-xs text-base-content/60 font-medium">Control Inteligente</span>
+            <h1 class="font-extrabold text-lg tracking-tight leading-none text-neutral">CRONOS</h1>
+            <span class="text-[10px] text-primary font-bold uppercase tracking-wider">Control Financiero</span>
           </div>
         </div>
         <div class="flex-none gap-2">
-          <div class="badge badge-primary badge-outline font-semibold text-xs py-2 px-3">
-            SSR Vercel
+          <!-- Avatar del Usuario -->
+          <div class="avatar placeholder">
+            <div class="bg-neutral text-neutral-content rounded-full w-8 ring-2 ring-primary ring-offset-base-100 ring-offset-1">
+              <span class="text-xs font-bold">LU</span>
+            </div>
           </div>
         </div>
       </header>
 
       <!-- Contenido Principal -->
-      <main class="flex-1 p-4 pb-24">
+      <main class="flex-1 p-4 pb-28">
         <slot />
       </main>
 
-      <!-- Barra de Estado Inferior / PWA Ready -->
-      <footer class="fixed bottom-0 max-w-xl w-full bg-base-100/95 backdrop-blur-md border-t border-base-200 p-2 text-center text-xs text-base-content/60 flex items-center justify-between px-6 z-30">
-        <span class="flex items-center gap-1.5 font-medium">
-          <span class="inline-block w-2 h-2 rounded-full bg-success animate-pulse"></span>
-          Neon Postgres Online
-        </span>
-        <span class="badge badge-ghost badge-sm text-[10px]">v1.0 • PWA Ready</span>
-      </footer>
+      <!-- Toast Container Nativo DaisyUI -->
+      <div id="toast-container" class="toast toast-top toast-center z-50 pointer-events-none w-full max-w-xs transition-all"></div>
     </div>
 
-    <!-- Script de registro PWA Service Worker -->
+    <!-- PWA Service Worker Registration -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.log('ServiceWorker registration note: active in production/build mode', err);
+            console.log('CRONOS ServiceWorker: Activo en modo build/producción', err);
           });
         });
       }

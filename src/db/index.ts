@@ -5,7 +5,7 @@ import * as schema from './schema';
 const connectionString = process.env.DATABASE_URL || '';
 
 if (!connectionString) {
-  console.warn('⚠️ [DB Warning] DATABASE_URL no está configurada en las variables de entorno.');
+  console.warn('⚠️ [CRONOS DB] DATABASE_URL no configurada. Configure su connection string de Neon en .env');
 }
 
 const sql = neon(connectionString || 'postgres://user:password@localhost:5432/neondb');

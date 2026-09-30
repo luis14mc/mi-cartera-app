@@ -1,5 +1,5 @@
 {
-  "id": "60c8a5bf-6ba6-4380-aab8-88db060d0cef",
+  "id": "de203cee-09a7-4f30-a6a8-bf49215becc7",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -16,7 +16,7 @@
         },
         "name": {
           "name": "name",
-          "type": "text",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true
         },
@@ -25,6 +25,13 @@
           "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": true
+        },
+        "icon": {
+          "name": "icon",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'tag'"
         }
       },
       "indexes": {},
@@ -47,7 +54,7 @@
         },
         "title": {
           "name": "title",
-          "type": "text",
+          "type": "varchar(150)",
           "primaryKey": false,
           "notNull": true
         },
@@ -57,18 +64,19 @@
           "primaryKey": false,
           "notNull": true
         },
-        "due_date": {
-          "name": "due_date",
-          "type": "timestamp with time zone",
+        "due_day": {
+          "name": "due_day",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": 20
         },
-        "is_paid": {
-          "name": "is_paid",
+        "is_active": {
+          "name": "is_active",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": false
+          "default": true
         }
       },
       "indexes": {},
@@ -103,7 +111,7 @@
         },
         "description": {
           "name": "description",
-          "type": "text",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
