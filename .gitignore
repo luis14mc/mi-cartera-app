@@ -20,3 +20,6 @@ workbox-*.js
 # OS files
 .DS_Store
 Thumbs.db
+
+# Claude symlinks
+.claude/
