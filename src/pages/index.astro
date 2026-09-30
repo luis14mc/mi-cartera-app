@@ -336,329 +336,433 @@ const overallSpentPct = variableBudgetTotal > 0
       </div>
     </div>
 
-    <!-- ALERTA PROACTIVA DE DEUDA FIJA (Días 17 al 20) -->
-    {isDebtAlertActive && (
-      <div class="rounded-2xl bg-surface-container-high p-3.5 border border-warning/40 shadow-sm flex items-start gap-3 animate-pulse">
-        <div class="w-8 h-8 rounded-full bg-warning/20 text-warning flex items-center justify-center shrink-0 mt-0.5">
-          <span class="material-symbols-outlined text-[19px]">notifications_active</span>
-        </div>
-        <div>
-          <h4 class="font-bold text-xs uppercase tracking-wider text-warning">
-            ¡Compromiso Crítico Día 20!
-          </h4>
-          <p class="text-xs text-on-surface font-semibold leading-snug mt-0.5">
-            Separa L. 4,400 para tarjetas/préstamo antes del día 20.
-          </p>
-        </div>
+    <!-- CONTROL SEGMENTADO DE VISTAS (LIQUID GLASS BAR) -->
+    <!-- Elimina la vista en un solo chorizo y permite ver cada sección de forma activa y enfocada -->
+    <div class="sticky top-[54px] z-30 py-1 -mx-1 px-1">
+      <div class="liquid-glass rounded-2xl p-1 flex items-center gap-1 shadow-lg overflow-x-auto no-scrollbar" id="dashboard-view-tabs">
+        <button
+          type="button"
+          data-view="resumen"
+          class="view-tab-btn flex-1 min-w-[76px] py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 bg-primary text-on-primary shadow-[0_2px_10px_rgba(30,184,84,0.35),inset_0_1px_0_rgba(255,255,255,0.25)]"
+        >
+          <span class="material-symbols-outlined text-[16px]">grid_view</span>
+          <span>Resumen</span>
+        </button>
+        <button
+          type="button"
+          data-view="compromisos"
+          class="view-tab-btn flex-1 min-w-[92px] py-1.5 px-2.5 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-1 transition-all active:scale-95"
+        >
+          <span class="material-symbols-outlined text-[16px]">lock</span>
+          <span>Intocables</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+        </button>
+        <button
+          type="button"
+          data-view="categorias"
+          class="view-tab-btn flex-1 min-w-[84px] py-1.5 px-2.5 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-1 transition-all active:scale-95"
+        >
+          <span class="material-symbols-outlined text-[16px]">pie_chart</span>
+          <span>Límites</span>
+        </button>
+        <button
+          type="button"
+          data-view="fugas"
+          class="view-tab-btn flex-1 min-w-[74px] py-1.5 px-2.5 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-1 transition-all active:scale-95"
+        >
+          <span class="material-symbols-outlined text-[16px]">content_cut</span>
+          <span>Fugas</span>
+        </button>
+        <button
+          type="button"
+          data-view="todo"
+          class="view-tab-btn py-1.5 px-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-0.5 transition-all active:scale-95"
+          title="Ver todo continuo"
+        >
+          <span class="material-symbols-outlined text-[16px]">unfold_more</span>
+        </button>
       </div>
-    )}
+    </div>
 
-    <!-- RESUMEN DE BALANCE MENSUAL (HERO CARD CANOPY NOCTURNE) -->
-    <section class="bg-surface-container rounded-2xl p-4.5 border border-outline-variant/20 shadow-md flex flex-col gap-3 relative overflow-hidden">
-      <div class="flex items-center justify-between">
-        <div class="flex flex-col">
-          <span class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">
-            Control Mensual
-          </span>
-          <span class="font-bold text-base text-on-surface tracking-tight font-headline">
-            Liquidez Real Disponible
-          </span>
-        </div>
-        <div class="flex items-center gap-1 bg-surface-container-high px-3 py-1 rounded-full text-secondary text-xs font-semibold">
-          <span class="material-symbols-outlined text-[15px]">calendar_today</span>
-          <span>Octubre</span>
-        </div>
-      </div>
-
-      <!-- Cifra y Barra Minimalista Orgánica -->
-      <div class="flex flex-col gap-1 my-0.5">
-        <div class="flex items-baseline gap-2 flex-wrap">
-          <span class="text-3xl sm:text-4xl font-extrabold tracking-tight text-on-surface font-headline">
-            L. {disposableSalary.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
-          </span>
-          <span class="text-xs text-on-surface-variant font-medium">
-            / L. {MONTHLY_SALARY.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        <!-- Barra de progreso orgánica sutil -->
-        <div class="w-full bg-surface-container-lowest h-2 rounded-full overflow-hidden mt-1.5">
-          <div
-            class="bg-primary h-full rounded-full transition-all duration-500 ease-out"
-            style={`width: ${Math.max(5, 100 - overallSpentPct)}%`}
-          ></div>
-        </div>
-
-        <div class="flex justify-between items-center text-[11px] text-on-surface-variant font-medium pt-0.5">
-          <span>L. 8,750 Congelados al inicio</span>
-          <span class="text-primary font-semibold">
-            {disposableSalary > 0 ? 'Liquidez controlada' : 'Límite alcanzado'}
-          </span>
-        </div>
-      </div>
-
-      <!-- Indicadores Secundarios en Surface-Container-Low -->
-      <div class="grid grid-cols-2 gap-2 pt-1">
-        <div class="bg-surface-container-low p-2.5 rounded-xl border border-outline-variant/10 flex flex-col gap-0.5">
-          <span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
-            Compromisos Fijos
-          </span>
-          <span class="text-xs sm:text-sm font-bold text-secondary font-headline">
-            -L. {UNTOUCHABLE_COMMITMENTS_TOTAL.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
-          </span>
-          <span class="text-[9px] text-on-surface-variant/70">Maestría + Préstamo</span>
-        </div>
-        <div class="bg-surface-container-low p-2.5 rounded-xl border border-outline-variant/10 flex flex-col gap-0.5">
-          <span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
-            Gastos Variables
-          </span>
-          <span class="text-xs sm:text-sm font-bold text-error font-headline">
-            L. {totalVariableSpent.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
-          </span>
-          <span class="text-[9px] text-on-surface-variant/70">Super, Gas, Ocio, Soft</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- 🔒 SECCIÓN COMPROMISOS INTOCABLES (MAESTRÍA & DEUDAS FIJAS) -->
-    <section id="section-commitments" class="bg-surface-container rounded-2xl p-4 border-2 border-primary/30 shadow-md flex flex-col gap-3">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <div class="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center">
-            <span class="material-symbols-outlined text-[17px]">lock</span>
+    <!-- ========================================== -->
+    <!-- 1. VISTA: RESUMEN GENERAL (HERO + RECIENTES) -->
+    <!-- ========================================== -->
+    <div id="panel-resumen" class="view-panel space-y-3.5 transition-opacity duration-300">
+      <!-- RESUMEN DE BALANCE MENSUAL (HERO CARD LIQUID GLASS) -->
+      <section class="liquid-glass-card rounded-2xl p-4.5 flex flex-col gap-3 relative overflow-hidden">
+        <div class="flex items-center justify-between">
+          <div class="flex flex-col">
+            <span class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">
+              Control Mensual
+            </span>
+            <span class="font-bold text-base text-on-surface tracking-tight font-headline">
+              Liquidez Real Disponible
+            </span>
           </div>
-          <div>
+          <div class="flex items-center gap-1 bg-surface-container-high/80 px-3 py-1 rounded-full text-secondary text-xs font-semibold border border-outline-variant/20">
+            <span class="material-symbols-outlined text-[15px]">calendar_today</span>
+            <span>Octubre</span>
+          </div>
+        </div>
+
+        <!-- Cifra y Barra Minimalista Orgánica -->
+        <div class="flex flex-col gap-1 my-0.5">
+          <div class="flex items-baseline gap-2 flex-wrap">
+            <span class="text-3xl sm:text-4xl font-extrabold tracking-tight text-on-surface font-headline">
+              L. {disposableSalary.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+            </span>
+            <span class="text-xs text-on-surface-variant font-medium">
+              / L. {MONTHLY_SALARY.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          <!-- Barra de progreso orgánica sutil -->
+          <div class="w-full bg-surface-container-lowest h-2 rounded-full overflow-hidden mt-1.5">
+            <div
+              class="bg-primary h-full rounded-full transition-all duration-500 ease-out"
+              style={`width: ${Math.max(5, 100 - overallSpentPct)}%`}
+            ></div>
+          </div>
+
+          <div class="flex justify-between items-center text-[11px] text-on-surface-variant font-medium pt-0.5">
+            <span>L. 8,750 Congelados al inicio</span>
+            <span class="text-primary font-semibold">
+              {disposableSalary > 0 ? 'Liquidez controlada' : 'Límite alcanzado'}
+            </span>
+          </div>
+        </div>
+
+        <!-- Indicadores Secundarios en Surface-Container-Low -->
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <div class="bg-surface-container-low/70 p-2.5 rounded-xl border border-outline-variant/15 flex flex-col gap-0.5">
+            <span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
+              Compromisos Fijos
+            </span>
+            <span class="text-xs sm:text-sm font-bold text-secondary font-headline">
+              -L. {UNTOUCHABLE_COMMITMENTS_TOTAL.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+            </span>
+            <span class="text-[9px] text-on-surface-variant/70">Maestría + Préstamo</span>
+          </div>
+          <div class="bg-surface-container-low/70 p-2.5 rounded-xl border border-outline-variant/15 flex flex-col gap-0.5">
+            <span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
+              Gastos Variables
+            </span>
+            <span class="text-xs sm:text-sm font-bold text-error font-headline">
+              L. {totalVariableSpent.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+            </span>
+            <span class="text-[9px] text-on-surface-variant/70">Super, Gas, Ocio, Soft</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tarjeta de Acceso a Módulos con Liquid Glass -->
+      <div class="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onclick="window.switchDashboardView('compromisos')"
+          class="liquid-glass p-3 rounded-2xl flex flex-col items-start gap-1 hover:border-secondary/40 transition-all text-left group"
+        >
+          <div class="w-8 h-8 rounded-full bg-secondary/15 text-secondary flex items-center justify-center">
+            <span class="material-symbols-outlined text-[18px]">lock</span>
+          </div>
+          <span class="text-xs font-bold text-on-surface mt-1 group-hover:text-secondary transition-colors">Compromisos</span>
+          <span class="text-[10px] text-on-surface-variant">L. 8,750 fijados</span>
+        </button>
+
+        <button
+          type="button"
+          onclick="window.switchDashboardView('categorias')"
+          class="liquid-glass p-3 rounded-2xl flex flex-col items-start gap-1 hover:border-primary/40 transition-all text-left group"
+        >
+          <div class="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-[18px]">pie_chart</span>
+          </div>
+          <span class="text-xs font-bold text-on-surface mt-1 group-hover:text-primary transition-colors">Gastos Variables</span>
+          <span class="text-[10px] text-on-surface-variant">4 categorías</span>
+        </button>
+      </div>
+
+      <!-- HISTORIAL RECIENTE DE GASTOS -->
+      {recentTransactions.length > 0 && (
+        <section class="flex flex-col gap-2.5">
+          <div class="flex items-center justify-between px-1">
             <h2 class="font-bold text-sm text-on-surface tracking-tight font-headline">
-              Compromisos Intocables
+              Últimos movimientos
             </h2>
-            <p class="text-[10px] text-on-surface-variant">
-              L. 8,750.00 congelados al inicio de cada mes
-            </p>
+            <a href="/gastos" class="text-[11px] text-primary hover:underline font-semibold flex items-center gap-0.5">
+              Ver históricos
+              <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+            </a>
           </div>
-        </div>
-        <span class="badge badge-primary text-on-primary text-[9px] font-bold px-2 py-0.5">
-          PRIORIDAD MÁXIMA
-        </span>
-      </div>
 
-      <!-- Tarjetas de Compromisos Intocables (Checklist Financiero) -->
-      <div class="bg-surface-container-lowest rounded-xl overflow-hidden divide-y divide-surface-container-high border border-outline-variant/10">
-        {untouchableCommitments.map((cat) => (
-          <div class="p-3.5 flex items-center justify-between hover:bg-surface-container-high/30 transition-colors">
-            <div class="flex items-center gap-3 min-w-0">
-              <div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary shrink-0 shadow-sm">
-                <span class="material-symbols-outlined text-[20px]">{cat.materialIcon}</span>
-              </div>
-              <div class="min-w-0">
-                <h3 class="font-bold text-xs text-on-surface truncate font-headline">
-                  {cat.name}
-                </h3>
-                <span class="text-[10px] text-on-surface-variant block">
-                  {cat.name.toLowerCase().includes('maestr') ? 'Mensualidad Maestría' : 'Cuota Crédito Día 20'}
-                </span>
-              </div>
-            </div>
-
-            <div class="flex flex-col items-end gap-1 shrink-0">
-              <span class="font-bold text-xs text-on-surface tabular-nums">
-                L. {cat.monthlyLimit.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
-              </span>
-
-              {cat.isPaid ? (
-                <span class="bg-primary/20 text-primary px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm">
-                  <span class="material-symbols-outlined text-[13px]">check_circle</span>
-                  PAGADO
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  class="btn-pay-commitment text-[11px] font-semibold text-secondary bg-surface-container px-3 py-1 rounded-full hover:bg-primary hover:text-on-primary transition-all active:scale-95 shadow-sm border border-outline-variant/20"
-                  data-cat-id={cat.id}
-                  data-cat-name={cat.name}
-                  data-cat-amount={cat.monthlyLimit}
-                >
-                  Registrar Pago
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-
-    <!-- CHECKLIST: FUGAS A CORTAR HOY (SUSCRIPCIONES) -->
-    <section id="section-checklist" class="bg-surface-container rounded-2xl p-4 border border-outline-variant/20 shadow-md flex flex-col gap-3">
-      <div class="flex justify-between items-center">
-        <div class="flex items-center gap-2">
-          <div class="w-7 h-7 rounded-full bg-error-container/30 text-error flex items-center justify-center">
-            <span class="material-symbols-outlined text-[17px]">content_cut</span>
-          </div>
-          <div>
-            <h3 class="font-bold text-sm text-on-surface tracking-tight font-headline">
-              Fugas a Cortar Hoy
-            </h3>
-            <p class="text-[10px] text-on-surface-variant">
-              Marca las suscripciones al cancelarlas para recuperar liquidez:
-            </p>
-          </div>
-        </div>
-        <span class="badge badge-error text-error-content text-[10px] font-bold px-2">
-          $54.98 / mes
-        </span>
-      </div>
-
-      <div class="space-y-1.5" id="leaks-checklist">
-        <!-- Item 1 -->
-        <label class="flex items-center gap-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/10 cursor-pointer hover:bg-surface-container-high transition-colors">
-          <input
-            type="checkbox"
-            data-leak-id="nanonoble"
-            class="checkbox checkbox-error checkbox-sm rounded-md"
-          />
-          <div class="flex-1 flex justify-between items-center text-xs">
-            <span class="font-medium text-on-surface leak-title">Cancelar Nanonoble</span>
-            <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$20.00</span>
-          </div>
-        </label>
-
-        <!-- Item 2 -->
-        <label class="flex items-center gap-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/10 cursor-pointer hover:bg-surface-container-high transition-colors">
-          <input
-            type="checkbox"
-            data-leak-id="appleone"
-            class="checkbox checkbox-error checkbox-sm rounded-md"
-          />
-          <div class="flex-1 flex justify-between items-center text-xs">
-            <span class="font-medium text-on-surface leak-title">Cancelar Apple One</span>
-            <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$16.95</span>
-          </div>
-        </label>
-
-        <!-- Item 3 -->
-        <label class="flex items-center gap-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/10 cursor-pointer hover:bg-surface-container-high transition-colors">
-          <input
-            type="checkbox"
-            data-leak-id="amazonprime"
-            class="checkbox checkbox-error checkbox-sm rounded-md"
-          />
-          <div class="flex-1 flex justify-between items-center text-xs">
-            <span class="font-medium text-on-surface leak-title">Cancelar Amazon Prime</span>
-            <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$16.04</span>
-          </div>
-        </label>
-
-        <!-- Item 4 -->
-        <label class="flex items-center gap-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/10 cursor-pointer hover:bg-surface-container-high transition-colors">
-          <input
-            type="checkbox"
-            data-leak-id="twitch"
-            class="checkbox checkbox-error checkbox-sm rounded-md"
-          />
-          <div class="flex-1 flex justify-between items-center text-xs">
-            <span class="font-medium text-on-surface leak-title">Cancelar Twitch</span>
-            <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$1.99</span>
-          </div>
-        </label>
-      </div>
-    </section>
-
-    <!-- DISTRIBUCIÓN POR CATEGORÍA (GASTOS VARIABLES) -->
-    <section id="section-expenses" class="flex flex-col gap-2.5">
-      <div class="flex items-center justify-between px-1">
-        <h2 class="font-bold text-sm text-on-surface tracking-tight font-headline">
-          Distribución por categoría
-        </h2>
-        <span class="text-[11px] text-secondary font-medium">Límites Estrictos</span>
-      </div>
-
-      <div class="bg-surface-container rounded-2xl p-4 flex flex-col gap-3.5 border border-outline-variant/20 shadow-md">
-        {variableCategories.map((cat) => (
-          <div class="flex flex-col gap-1.5">
-            <div class="flex justify-between items-center text-xs">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-[18px] text-tertiary">
-                  {cat.materialIcon}
-                </span>
-                <span class="font-semibold text-on-surface">{cat.name}</span>
-                {cat.isOcioDanger && (
-                  <span class="text-[9px] text-error font-bold bg-error/15 px-1.5 py-0.5 rounded-full animate-pulse border border-error/20">
-                    &gt; L. 1,000
-                  </span>
-                )}
-              </div>
-              <span class="font-medium text-on-surface tabular-nums">
-                L. {cat.currentSpent.toFixed(0)}{' '}
-                <span class="text-on-surface-variant font-normal">
-                  / L. {cat.monthlyLimit.toFixed(0)}
-                </span>
-              </span>
-            </div>
-
-            <!-- Barra de progreso orgánica sutil -->
-            <div class="w-full bg-surface-container-lowest h-1.5 rounded-full overflow-hidden">
-              <div
-                class={`${cat.barColorClass} h-full rounded-full transition-all duration-500`}
-                style={`width: ${cat.percentage}%`}
-              ></div>
-            </div>
-
-            {cat.isHardStopTriggered && (
-              <div class="text-[10px] text-error font-semibold flex items-center gap-1 bg-error/10 p-1.5 rounded-lg border border-error/20">
-                <span class="material-symbols-outlined text-[13px]">block</span>
-                <span>Hard Stop Activo: Límite mensual agotado. Compras bloqueadas.</span>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-
-    <!-- HISTORIAL RECIENTE DE GASTOS -->
-    {recentTransactions.length > 0 && (
-      <section class="flex flex-col gap-2.5">
-        <div class="flex items-center justify-between px-1">
-          <h2 class="font-bold text-sm text-on-surface tracking-tight font-headline">
-            Últimos movimientos
-          </h2>
-          <a href="/gastos" class="text-[11px] text-primary hover:underline font-semibold flex items-center gap-0.5">
-            Ver históricos
-            <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
-          </a>
-        </div>
-
-        <div class="bg-surface-container rounded-2xl overflow-hidden divide-y divide-surface-container-high border border-outline-variant/20 shadow-md">
-          {recentTransactions.map((item) => (
-            <div class="p-3 flex items-center justify-between hover:bg-surface-container-high/30 transition-colors">
-              <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-full bg-surface-container-lowest flex items-center justify-center text-tertiary shrink-0">
-                  <span class="material-symbols-outlined text-[17px]">{item.materialIcon}</span>
-                </div>
-                <div>
-                  <p class="font-bold text-xs text-on-surface leading-tight">{item.description}</p>
-                  <div class="flex items-center gap-1.5 mt-0.5">
-                    <span class="text-[10px] text-on-surface-variant">
-                      {item.categoryName} • {item.formattedDate}
-                    </span>
-                    {item.paymentMethod === 'TARJETA_CREDITO' ? (
-                      <span class="bg-error/15 text-error px-1.5 py-0.2 rounded-full text-[9px] font-bold">
-                        Crédito
+          <div class="liquid-glass-card rounded-2xl overflow-hidden divide-y divide-outline-variant/15 border border-outline-variant/20 shadow-md">
+            {recentTransactions.map((item) => (
+              <div class="p-3 flex items-center justify-between hover:bg-surface-container-high/30 transition-colors">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-tertiary shrink-0">
+                    <span class="material-symbols-outlined text-[17px]">{item.materialIcon}</span>
+                  </div>
+                  <div>
+                    <p class="font-bold text-xs text-on-surface leading-tight">{item.description}</p>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                      <span class="text-[10px] text-on-surface-variant">
+                        {item.categoryName} • {item.formattedDate}
                       </span>
-                    ) : (
-                      <span class="bg-primary/15 text-primary px-1.5 py-0.2 rounded-full text-[9px] font-bold">
-                        Débito
-                      </span>
-                    )}
+                      {item.paymentMethod === 'TARJETA_CREDITO' ? (
+                        <span class="bg-error/15 text-error px-1.5 py-0.2 rounded-full text-[9px] font-bold">
+                          Crédito
+                        </span>
+                      ) : (
+                        <span class="bg-primary/15 text-primary px-1.5 py-0.2 rounded-full text-[9px] font-bold">
+                          Débito
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <span class="font-bold text-xs text-on-surface tabular-nums">
+                  L. {item.amount}
+                </span>
               </div>
-              <span class="font-bold text-xs text-on-surface tabular-nums">
-                L. {item.amount}
-              </span>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 2. VISTA: COMPROMISOS INTOCABLES (PAGOS) -->
+    <!-- ========================================== -->
+    <div id="panel-compromisos" class="view-panel hidden space-y-3.5 transition-opacity duration-300">
+      <!-- ALERTA PROACTIVA DE DEUDA FIJA (Días 17 al 20) -->
+      {isDebtAlertActive && (
+        <div class="rounded-2xl liquid-glass p-3.5 border border-warning/40 shadow-sm flex items-start gap-3 animate-pulse">
+          <div class="w-8 h-8 rounded-full bg-warning/20 text-warning flex items-center justify-center shrink-0 mt-0.5">
+            <span class="material-symbols-outlined text-[19px]">notifications_active</span>
+          </div>
+          <div>
+            <h4 class="font-bold text-xs uppercase tracking-wider text-warning">
+              ¡Compromiso Crítico Día 20!
+            </h4>
+            <p class="text-xs text-on-surface font-semibold leading-snug mt-0.5">
+              Separa L. 4,400 para tarjetas/préstamo antes del día 20.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <!-- 🔒 SECCIÓN COMPROMISOS INTOCABLES (MAESTRÍA & DEUDAS FIJAS) -->
+      <section id="section-commitments" class="liquid-glass-card rounded-2xl p-4 border border-primary/40 shadow-md flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+              <span class="material-symbols-outlined text-[18px]">lock</span>
+            </div>
+            <div>
+              <h2 class="font-bold text-sm text-on-surface tracking-tight font-headline">
+                Compromisos Intocables
+              </h2>
+              <p class="text-[10px] text-on-surface-variant">
+                L. 8,750.00 congelados al inicio de cada mes
+              </p>
+            </div>
+          </div>
+          <span class="badge badge-primary text-on-primary text-[9px] font-bold px-2 py-0.5">
+            PRIORIDAD MÁXIMA
+          </span>
+        </div>
+
+        <!-- Tarjetas de Compromisos Intocables (Checklist Financiero) -->
+        <div class="bg-surface-container-lowest/60 rounded-xl overflow-hidden divide-y divide-outline-variant/15 border border-outline-variant/20">
+          {untouchableCommitments.map((cat) => (
+            <div class="p-3.5 flex items-center justify-between hover:bg-surface-container-high/30 transition-colors">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary shrink-0 shadow-sm">
+                  <span class="material-symbols-outlined text-[20px]">{cat.materialIcon}</span>
+                </div>
+                <div class="min-w-0">
+                  <h3 class="font-bold text-xs text-on-surface truncate font-headline">
+                    {cat.name}
+                  </h3>
+                  <span class="text-[10px] text-on-surface-variant block">
+                    {cat.name.toLowerCase().includes('maestr') ? 'Mensualidad Maestría' : 'Cuota Crédito Día 20'}
+                  </span>
+                </div>
+              </div>
+
+              <div class="flex flex-col items-end gap-1 shrink-0">
+                <span class="font-bold text-xs text-on-surface tabular-nums">
+                  L. {cat.monthlyLimit.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+                </span>
+
+                {cat.isPaid ? (
+                  <span class="bg-primary/20 text-primary px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                    <span class="material-symbols-outlined text-[13px]">check_circle</span>
+                    PAGADO
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    class="btn-pay-commitment text-[11px] font-semibold text-secondary bg-surface-container px-3 py-1 rounded-full hover:bg-primary hover:text-on-primary transition-all active:scale-95 shadow-sm border border-outline-variant/20"
+                    data-cat-id={cat.id}
+                    data-cat-name={cat.name}
+                    data-cat-amount={cat.monthlyLimit}
+                  >
+                    Registrar Pago
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
       </section>
-    )}
+
+      <!-- Nota Informativa de Liquidez Congelada -->
+      <div class="liquid-glass p-3.5 rounded-2xl flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <span class="material-symbols-outlined text-[18px]">verified_user</span>
+        </div>
+        <p class="text-[11px] text-on-surface-variant leading-relaxed">
+          Estos pagos son obligatorios e inamovibles. La app descuenta automáticamente <strong class="text-on-surface">L. 8,750</strong> de tu salario desde el día 1.
+        </p>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 3. VISTA: GASTOS VARIABLES (LÍMITES) -->
+    <!-- ========================================== -->
+    <div id="panel-categorias" class="view-panel hidden space-y-3.5 transition-opacity duration-300">
+      <section id="section-expenses" class="flex flex-col gap-2.5">
+        <div class="flex items-center justify-between px-1">
+          <h2 class="font-bold text-sm text-on-surface tracking-tight font-headline">
+            Distribución por categoría
+          </h2>
+          <span class="text-[11px] text-secondary font-medium">Límites Estrictos</span>
+        </div>
+
+        <div class="liquid-glass-card rounded-2xl p-4 flex flex-col gap-3.5 border border-outline-variant/20 shadow-md">
+          {variableCategories.map((cat) => (
+            <div class="flex flex-col gap-1.5">
+              <div class="flex justify-between items-center text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-[18px] text-tertiary">
+                    {cat.materialIcon}
+                  </span>
+                  <span class="font-semibold text-on-surface">{cat.name}</span>
+                  {cat.isOcioDanger && (
+                    <span class="text-[9px] text-error font-bold bg-error/15 px-1.5 py-0.5 rounded-full animate-pulse border border-error/20">
+                      &gt; L. 1,000
+                    </span>
+                  )}
+                </div>
+                <span class="font-medium text-on-surface tabular-nums">
+                  L. {cat.currentSpent.toFixed(0)}{' '}
+                  <span class="text-on-surface-variant font-normal">
+                    / L. {cat.monthlyLimit.toFixed(0)}
+                  </span>
+                </span>
+              </div>
+
+              <!-- Barra de progreso orgánica sutil -->
+              <div class="w-full bg-surface-container-lowest h-1.5 rounded-full overflow-hidden">
+                <div
+                  class={`${cat.barColorClass} h-full rounded-full transition-all duration-500`}
+                  style={`width: ${cat.percentage}%`}
+                ></div>
+              </div>
+
+              {cat.isHardStopTriggered && (
+                <div class="text-[10px] text-error font-semibold flex items-center gap-1 bg-error/10 p-1.5 rounded-lg border border-error/20">
+                  <span class="material-symbols-outlined text-[13px]">block</span>
+                  <span>Hard Stop Activo: Límite mensual agotado. Compras bloqueadas.</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 4. VISTA: FUGAS A CORTAR (SUSCRIPCIONES) -->
+    <!-- ========================================== -->
+    <div id="panel-fugas" class="view-panel hidden space-y-3.5 transition-opacity duration-300">
+      <!-- CHECKLIST: FUGAS A CORTAR HOY (SUSCRIPCIONES) -->
+      <section id="section-checklist" class="liquid-glass-card rounded-2xl p-4 border border-outline-variant/20 shadow-md flex flex-col gap-3">
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full bg-error-container/30 text-error flex items-center justify-center">
+              <span class="material-symbols-outlined text-[18px]">content_cut</span>
+            </div>
+            <div>
+              <h3 class="font-bold text-sm text-on-surface tracking-tight font-headline">
+                Fugas a Cortar Hoy
+              </h3>
+              <p class="text-[10px] text-on-surface-variant">
+                Marca las suscripciones al cancelarlas para recuperar liquidez:
+              </p>
+            </div>
+          </div>
+          <span class="badge badge-error text-error-content text-[10px] font-bold px-2 py-0.5">
+            $54.98 / mes
+          </span>
+        </div>
+
+        <div class="space-y-1.5" id="leaks-checklist">
+          <!-- Item 1 -->
+          <label class="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/15 cursor-pointer hover:bg-surface-container-high transition-colors">
+            <input
+              type="checkbox"
+              data-leak-id="nanonoble"
+              class="checkbox checkbox-error checkbox-sm rounded-md"
+            />
+            <div class="flex-1 flex justify-between items-center text-xs">
+              <span class="font-medium text-on-surface leak-title">Cancelar Nanonoble</span>
+              <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$20.00</span>
+            </div>
+          </label>
+
+          <!-- Item 2 -->
+          <label class="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/15 cursor-pointer hover:bg-surface-container-high transition-colors">
+            <input
+              type="checkbox"
+              data-leak-id="appleone"
+              class="checkbox checkbox-error checkbox-sm rounded-md"
+            />
+            <div class="flex-1 flex justify-between items-center text-xs">
+              <span class="font-medium text-on-surface leak-title">Cancelar Apple One</span>
+              <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$16.95</span>
+            </div>
+          </label>
+
+          <!-- Item 3 -->
+          <label class="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/15 cursor-pointer hover:bg-surface-container-high transition-colors">
+            <input
+              type="checkbox"
+              data-leak-id="amazonprime"
+              class="checkbox checkbox-error checkbox-sm rounded-md"
+            />
+            <div class="flex-1 flex justify-between items-center text-xs">
+              <span class="font-medium text-on-surface leak-title">Cancelar Amazon Prime</span>
+              <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$16.04</span>
+            </div>
+          </label>
+
+          <!-- Item 4 -->
+          <label class="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low/70 border border-outline-variant/15 cursor-pointer hover:bg-surface-container-high transition-colors">
+            <input
+              type="checkbox"
+              data-leak-id="twitch"
+              class="checkbox checkbox-error checkbox-sm rounded-md"
+            />
+            <div class="flex-1 flex justify-between items-center text-xs">
+              <span class="font-medium text-on-surface leak-title">Cancelar Twitch</span>
+              <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$1.99</span>
+            </div>
+          </label>
+        </div>
+      </section>
+    </div>
 
   </div>
 
@@ -858,6 +962,82 @@ const overallSpentPct = variableBudgetTotal > 0
 </Layout>
 
 <script>
+  // ========================================================
+  // CONTROL DE VISTAS SEGMENTADAS (EVITA VISTA EN UN SOLO CHORIZO)
+  // ========================================================
+  function switchDashboardView(targetView: string, updateUrl: boolean = true) {
+    const panels: Record<string, HTMLElement | null> = {
+      resumen: document.getElementById('panel-resumen'),
+      compromisos: document.getElementById('panel-compromisos'),
+      categorias: document.getElementById('panel-categorias'),
+      fugas: document.getElementById('panel-fugas'),
+    };
+
+    const tabButtons = document.querySelectorAll('.view-tab-btn');
+    tabButtons.forEach((btn) => {
+      const v = btn.getAttribute('data-view');
+      if (v === targetView) {
+        btn.className = 'view-tab-btn flex-1 min-w-[76px] py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all active:scale-95 bg-primary text-on-primary shadow-[0_2px_10px_rgba(30,184,84,0.35),inset_0_1px_0_rgba(255,255,255,0.25)] scale-[1.02]';
+      } else {
+        btn.className = 'view-tab-btn flex-1 min-w-[76px] py-1.5 px-2.5 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface hover:bg-white/5 flex items-center justify-center gap-1 transition-all active:scale-95';
+      }
+    });
+
+    if (targetView === 'todo') {
+      Object.values(panels).forEach((p) => {
+        p?.classList.remove('hidden');
+      });
+    } else {
+      Object.entries(panels).forEach(([key, panel]) => {
+        if (key === targetView) {
+          panel?.classList.remove('hidden');
+        } else {
+          panel?.classList.add('hidden');
+        }
+      });
+    }
+
+    if (updateUrl && window.history.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', targetView);
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
+
+  // Hacer accesible globalmente
+  (window as any).switchDashboardView = switchDashboardView;
+
+  // Escuchar clics en los botones de pestaña
+  document.querySelectorAll('.view-tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const v = btn.getAttribute('data-view');
+      if (v) switchDashboardView(v);
+    });
+  });
+
+  // Detectar tab inicial por URL param o hash
+  const initialUrlParams = new URLSearchParams(window.location.search);
+  const tabParam = initialUrlParams.get('tab');
+  const hash = window.location.hash;
+
+  if (tabParam && ['resumen', 'compromisos', 'categorias', 'fugas', 'todo'].includes(tabParam)) {
+    switchDashboardView(tabParam, false);
+  } else if (hash.includes('commitments')) {
+    switchDashboardView('compromisos', false);
+  } else if (hash.includes('expenses')) {
+    switchDashboardView('categorias', false);
+  } else if (hash.includes('checklist')) {
+    switchDashboardView('fugas', false);
+  } else {
+    switchDashboardView('resumen', false);
+  }
+
+  // Escuchar hashchange
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash.includes('commitments')) switchDashboardView('compromisos', false);
+    else if (window.location.hash.includes('expenses')) switchDashboardView('categorias', false);
+  });
+
   // Control del Checklist "Fugas a Cortar Hoy" (Persistencia en LocalStorage)
   const checklistContainer = document.getElementById('leaks-checklist');
   const LEAKS_STORAGE_KEY = 'cronos_survival_cancelled_leaks_v2';
