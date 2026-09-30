@@ -1,0 +1,22 @@
+# Build output
+dist/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.production
+.env.local
+
+# Vercel output
+.vercel/
+
+# PWA sw generated
+sw.js
+workbox-*.js
+
+# OS files
+.DS_Store
+Thumbs.db

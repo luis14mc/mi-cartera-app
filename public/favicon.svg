@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="walletGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#047857" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="#f8fafc" />
+  <g filter="url(#shadow)">
+    <!-- Wallet Body -->
+    <rect x="76" y="136" width="360" height="240" rx="32" fill="url(#walletGrad)" />
+    <!-- Wallet Top Border/Strap Accent -->
+    <path d="M 76 190 L 436 190" stroke="#059669" stroke-width="4" stroke-opacity="0.5" />
+    <!-- Wallet Flap Pocket -->
+    <path d="M 276 216 L 436 216 C 445 216 452 223 452 232 L 452 280 C 452 289 445 296 436 296 L 276 296 C 254 296 236 278 236 256 C 236 234 254 216 276 216 Z" fill="#065f46" />
+    <!-- Golden Clasp / Coin Accent -->
+    <circle cx="286" cy="256" r="18" fill="#fbbf24" stroke="#f59e0b" stroke-width="3" />
+    <circle cx="286" cy="256" r="8" fill="#fef3c7" />
+    <!-- Card emerging from wallet -->
+    <rect x="116" y="96" width="280" height="70" rx="16" fill="#3b82f6" opacity="0.9" />
+    <rect x="140" y="118" width="50" height="12" rx="4" fill="#93c5fd" />
+    <circle cx="360" cy="124" r="10" fill="#f87171" opacity="0.8"/>
+    <circle cx="372" cy="124" r="10" fill="#fbbf24" opacity="0.8"/>
+  </g>
+</svg>

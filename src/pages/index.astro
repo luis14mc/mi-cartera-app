@@ -1,0 +1,463 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { db, schema } from '../db';
+import { eq, and, gte, lte, asc } from 'drizzle-orm';
+
+export const prerender = false;
+
+interface CategoryView {
+  id: number;
+  name: string;
+  monthlyLimit: number;
+  currentSpent: number;
+  percentage: number;
+  isExceeded: boolean;
+  isNearLimit: boolean;
+  progressColor: string;
+  badgeColor: string;
+}
+
+interface PaymentView {
+  id: number;
+  title: string;
+  amount: string;
+  formattedDate: string;
+  isPaid: boolean;
+  daysRemaining: number;
+  isUrgent: boolean;
+  isDay20: boolean;
+}
+
+let dbConfigured = true;
+let categoriesView: CategoryView[] = [];
+let upcomingPaymentsView: PaymentView[] = [];
+let totalBudget = 0;
+let totalSpent = 0;
+let errorMessage = '';
+
+try {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // 1. Obtener categorías desde la base de datos
+  const rawCategories = await db.select().from(schema.categories);
+
+  for (const cat of rawCategories) {
+    const catTransactions = await db
+      .select({ amount: schema.transactions.amount })
+      .from(schema.transactions)
+      .where(
+        and(
+          eq(schema.transactions.category_id, cat.id),
+          gte(schema.transactions.date, startOfMonth),
+          lte(schema.transactions.date, endOfMonth)
+        )
+      );
+
+    const spent = catTransactions.reduce((acc, t) => acc + parseFloat(t.amount || '0'), 0);
+    const limit = parseFloat(cat.monthly_limit);
+    const percentage = limit > 0 ? Math.min(Math.round((spent / limit) * 100), 100) : 0;
+    const isExceeded = spent >= limit;
+    const isNearLimit = !isExceeded && spent >= limit * 0.85;
+
+    categoriesView.push({
+      id: cat.id,
+      name: cat.name,
+      monthlyLimit: limit,
+      currentSpent: spent,
+      percentage,
+      isExceeded,
+      isNearLimit,
+      progressColor: isExceeded ? 'progress-error' : isNearLimit ? 'progress-warning' : 'progress-primary',
+      badgeColor: isExceeded ? 'badge-error text-white' : isNearLimit ? 'badge-warning' : 'badge-ghost',
+    });
+
+    totalBudget += limit;
+    totalSpent += spent;
+  }
+
+  // 2. Obtener pagos programados
+  const rawPayments = await db
+    .select()
+    .from(schema.scheduled_payments)
+    .where(eq(schema.scheduled_payments.is_paid, false))
+    .orderBy(asc(schema.scheduled_payments.due_date))
+    .limit(10);
+
+  upcomingPaymentsView = rawPayments.map((p) => {
+    const dueDate = new Date(p.due_date);
+    const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return {
+      id: p.id,
+      title: p.title,
+      amount: parseFloat(p.amount).toFixed(2),
+      formattedDate: dueDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
+      isPaid: p.is_paid,
+      daysRemaining: diffDays,
+      isUrgent: diffDays <= 1,
+      isDay20: dueDate.getDate() === 20,
+    };
+  });
+} catch (error: any) {
+  dbConfigured = false;
+  errorMessage = error.message || 'No se pudo conectar a la base de datos Neon.';
+
+  // Fallback para visualización inicial previa a la configuración de Neon
+  categoriesView = [
+    {
+      id: 1,
+      name: 'Alimentación y Supermercado',
+      monthlyLimit: 400.0,
+      currentSpent: 280.5,
+      percentage: 70,
+      isExceeded: false,
+      isNearLimit: false,
+      progressColor: 'progress-primary',
+      badgeColor: 'badge-ghost',
+    },
+    {
+      id: 2,
+      name: 'Transporte y Gasolina',
+      monthlyLimit: 150.0,
+      currentSpent: 135.0,
+      percentage: 90,
+      isExceeded: false,
+      isNearLimit: true,
+      progressColor: 'progress-warning',
+      badgeColor: 'badge-warning',
+    },
+    {
+      id: 3,
+      name: 'Servicios Básicos',
+      monthlyLimit: 180.0,
+      currentSpent: 90.0,
+      percentage: 50,
+      isExceeded: false,
+      isNearLimit: false,
+      progressColor: 'progress-primary',
+      badgeColor: 'badge-ghost',
+    },
+  ];
+  totalBudget = 730;
+  totalSpent = 505.5;
+
+  upcomingPaymentsView = [
+    {
+      id: 1,
+      title: 'Internet Fibra Óptica',
+      amount: '45.00',
+      formattedDate: 'En 1 día',
+      isPaid: false,
+      daysRemaining: 1,
+      isUrgent: true,
+      isDay20: false,
+    },
+    {
+      id: 2,
+      title: 'Tarjeta de Crédito (Corte día 20)',
+      amount: '120.00',
+      formattedDate: 'En 2 días',
+      isPaid: false,
+      daysRemaining: 2,
+      isUrgent: false,
+      isDay20: true,
+    },
+  ];
+}
+
+const overallPercentage = totalBudget > 0 ? Math.min(Math.round((totalSpent / totalBudget) * 100), 100) : 0;
+const currentMonthName = new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+---
+
+<Layout title="Dashboard de Gastos">
+  <!-- Banner Informativo de Conexión a Base de Datos -->
+  {!dbConfigured && (
+    <div class="alert alert-warning shadow-lg mb-6 text-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <div>
+        <p class="font-bold">Modo de Demostración</p>
+        <p class="text-xs opacity-90">Configura <code class="badge badge-sm font-mono">DATABASE_URL</code> en <code class="badge badge-sm font-mono">.env</code> para conectar tu Neon PostgreSQL.</p>
+      </div>
+    </div>
+  )}
+
+  <!-- 1. Tarjeta Resumen General del Mes -->
+  <section class="card bg-gradient-to-br from-primary to-emerald-800 text-primary-content shadow-xl mb-6 overflow-hidden">
+    <div class="card-body p-5">
+      <div class="flex justify-between items-start">
+        <div>
+          <span class="text-xs uppercase tracking-wider font-semibold opacity-80">Presupuesto Mensual</span>
+          <h2 class="text-3xl font-black mt-0.5 tracking-tight">
+            ${totalSpent.toFixed(2)}
+            <span class="text-sm font-normal opacity-80">/ ${totalBudget.toFixed(2)}</span>
+          </h2>
+        </div>
+        <div class="radial-progress bg-primary-content/10 text-primary-content text-xs font-bold" style={`--value:${overallPercentage}; --size:3rem; --thickness:4px;`} role="progressbar">
+          {overallPercentage}%
+        </div>
+      </div>
+
+      <div class="w-full bg-black/20 rounded-full h-2.5 mt-3 overflow-hidden">
+        <div 
+          class="bg-white h-2.5 rounded-full transition-all duration-500 ease-out" 
+          style={`width: ${overallPercentage}%`}
+        ></div>
+      </div>
+
+      <div class="flex justify-between items-center text-xs opacity-85 mt-2">
+        <span>Disponible: ${(totalBudget - totalSpent).toFixed(2)}</span>
+        <span class="capitalize">{currentMonthName}</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Comparativa: Gasto Actual vs Límite Mensual por Categoría -->
+  <section class="mb-6">
+    <div class="flex justify-between items-center mb-3">
+      <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        Límites por Categoría
+      </h3>
+      <span class="text-xs text-base-content/60 font-medium">{categoriesView.length} categorías</span>
+    </div>
+
+    <div class="space-y-3">
+      {categoriesView.map((cat) => (
+        <div class="card bg-base-100 border border-base-200 shadow-sm p-3.5 hover:shadow-md transition-shadow">
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="font-bold text-sm text-neutral">{cat.name}</span>
+            <span class={`badge badge-sm font-semibold ${cat.badgeColor}`}>
+              {cat.percentage}%
+            </span>
+          </div>
+
+          <!-- Barra de Progreso DaisyUI -->
+          <progress
+            class={`progress ${cat.progressColor} w-full h-2.5`}
+            value={cat.currentSpent}
+            max={cat.monthlyLimit}
+          ></progress>
+
+          <div class="flex justify-between items-center text-xs mt-1.5 text-base-content/70">
+            <span>Gastado: <strong class="text-neutral font-semibold">${cat.currentSpent.toFixed(2)}</strong></span>
+            <span>Límite: <span class="font-medium">${cat.monthlyLimit.toFixed(2)}</span></span>
+          </div>
+
+          {cat.isExceeded && (
+            <p class="text-[11px] text-error font-semibold mt-1 flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              ¡Límite mensual alcanzado o superado!
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- 3. Formulario en el Cliente para Registrar Nuevo Gasto -->
+  <section class="card bg-base-100 border border-base-200 shadow-md mb-6">
+    <div class="card-body p-5">
+      <h3 class="font-bold text-base text-neutral flex items-center gap-1.5 mb-2">
+        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        </svg>
+        Registrar Nueva Transacción
+      </h3>
+
+      <!-- Contenedor dinámico de alertas -->
+      <div id="form-alert" class="hidden mb-3"></div>
+
+      <form id="transaction-form" class="space-y-3">
+        <!-- Selector de Categoría -->
+        <div class="form-control">
+          <label class="label py-1">
+            <span class="label-text text-xs font-semibold">Categoría</span>
+          </label>
+          <select id="category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100">
+            <option value="" disabled selected>Selecciona una categoría...</option>
+            {categoriesView.map((c) => (
+              <option value={c.id}>
+                {c.name} (Límite: ${c.monthlyLimit.toFixed(2)})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <!-- Monto -->
+        <div class="form-control">
+          <label class="label py-1">
+            <span class="label-text text-xs font-semibold">Monto ($)</span>
+          </label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-base-content/50">$</span>
+            <input
+              type="number"
+              id="amount"
+              name="amount"
+              step="0.01"
+              min="0.01"
+              placeholder="0.00"
+              required
+              class="input input-bordered input-sm w-full pl-7 font-bold text-neutral"
+            />
+          </div>
+        </div>
+
+        <!-- Descripción -->
+        <div class="form-control">
+          <label class="label py-1">
+            <span class="label-text text-xs font-semibold">Descripción (Opcional)</span>
+          </label>
+          <input
+            type="text"
+            id="description"
+            name="description"
+            placeholder="Ej. Supermercado semanal, Gasolina..."
+            class="input input-bordered input-sm w-full"
+          />
+        </div>
+
+        <!-- Botón de Envío -->
+        <button
+          type="submit"
+          id="submit-btn"
+          class="btn btn-primary btn-sm w-full mt-2 font-bold normal-case text-white"
+        >
+          <span id="btn-text">Guardar Gasto</span>
+          <span id="btn-spinner" class="loading loading-spinner loading-xs hidden"></span>
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 4. Próximos Pagos Programados -->
+  <section class="mb-4">
+    <div class="flex justify-between items-center mb-3">
+      <h3 class="font-bold text-base text-neutral flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Próximos Pagos Programados
+      </h3>
+      <a href="/api/cron/reminders" target="_blank" class="text-xs text-primary font-medium hover:underline">
+        Probar Cron ↗
+      </a>
+    </div>
+
+    {upcomingPaymentsView.length === 0 ? (
+      <div class="card bg-base-100 border border-base-200 p-6 text-center text-xs text-base-content/60">
+        No hay pagos programados pendientes.
+      </div>
+    ) : (
+      <div class="space-y-2.5">
+        {upcomingPaymentsView.map((payment) => (
+          <div class="card bg-base-100 border border-base-200 shadow-sm p-3 flex flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${payment.isUrgent ? 'bg-error/15 text-error' : 'bg-warning/15 text-warning'}`}>
+                📅
+              </div>
+              <div>
+                <h4 class="font-bold text-sm text-neutral leading-tight flex items-center gap-1.5">
+                  {payment.title}
+                  {payment.isDay20 && (
+                    <span class="badge badge-accent badge-outline badge-xs font-semibold">
+                      Día 20
+                    </span>
+                  )}
+                </h4>
+                <p class="text-xs text-base-content/60 mt-0.5">
+                  {payment.formattedDate}
+                  {payment.isUrgent ? (
+                    <span class="text-error font-bold ml-1">• Vence pronto</span>
+                  ) : (
+                    <span class="ml-1">• en {payment.daysRemaining} días</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div class="text-right">
+              <span class="font-black text-sm text-neutral block">${payment.amount}</span>
+              <span class="badge badge-ghost badge-xs text-base-content/60">Pendiente</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </section>
+</Layout>
+
+<script>
+  const form = document.getElementById('transaction-form') as HTMLFormElement;
+  const alertBox = document.getElementById('form-alert') as HTMLDivElement;
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+  const btnText = document.getElementById('btn-text') as HTMLSpanElement;
+  const btnSpinner = document.getElementById('btn-spinner') as HTMLSpanElement;
+
+  function showAlert(message: string, type: 'success' | 'error') {
+    alertBox.className = `alert ${type === 'success' ? 'alert-success text-white' : 'alert-error text-white'} text-xs font-medium shadow-md mb-3 flex items-start gap-2`;
+    alertBox.innerHTML = `
+      <span>${type === 'success' ? '✅' : '❌'}</span>
+      <div>${message}</div>
+    `;
+    alertBox.classList.remove('hidden');
+  }
+
+  function hideAlert() {
+    alertBox.classList.add('hidden');
+  }
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideAlert();
+
+    const categoryId = (document.getElementById('category_id') as HTMLSelectElement).value;
+    const amount = (document.getElementById('amount') as HTMLInputElement).value;
+    const description = (document.getElementById('description') as HTMLInputElement).value;
+
+    submitBtn.disabled = true;
+    btnText.textContent = 'Verificando límite...';
+    btnSpinner.classList.remove('hidden');
+
+    try {
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category_id: categoryId,
+          amount: parseFloat(amount),
+          description,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        let msg = result.error || 'No fue posible registrar el gasto.';
+        if (result.details) {
+          msg += `<br/><span class="text-[11px] opacity-90 mt-1 block">Límite: $${result.details.monthlyLimit} | Gastado: $${result.details.currentSpent} | Exceso: $${result.details.exceededBy}</span>`;
+        }
+        showAlert(msg, 'error');
+      } else {
+        showAlert(`¡Gasto registrado con éxito! Saldo restante: $${result.summary?.remainingBudget || ''}`, 'success');
+        form.reset();
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      }
+    } catch (err: any) {
+      showAlert('Error de conexión al enviar la transacción.', 'error');
+    } finally {
+      submitBtn.disabled = false;
+      btnText.textContent = 'Guardar Gasto';
+      btnSpinner.classList.add('hidden');
+    }
+  });
+</script>
