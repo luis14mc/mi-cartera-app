@@ -7,7 +7,7 @@ const { title } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="es" data-theme="cronos">
+<html lang="es" data-theme="forest">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -15,8 +15,8 @@ const { title } = Astro.props;
     <meta name="generator" content={Astro.generator} />
     <title>{title} | Control CRONOS</title>
     
-    <!-- PWA Settings -->
-    <meta name="theme-color" content="#1a73e8" />
+    <!-- PWA Settings con tema Forest -->
+    <meta name="theme-color" content="#181313" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CRONOS" />
@@ -27,24 +27,54 @@ const { title } = Astro.props;
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
+    <style is:global>
       body {
         font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
       }
+      [data-theme="forest"] {
+        --color-base-100: oklch(20.84% 0.008 17.911);
+        --color-base-200: oklch(18.522% 0.007 17.911);
+        --color-base-300: oklch(16.203% 0.007 17.911);
+        --color-base-content: oklch(83.768% 0.001 17.911);
+        --color-primary: oklch(68.628% 0.185 148.958);
+        --color-primary-content: oklch(0% 0 0);
+        --color-secondary: oklch(69.776% 0.135 168.327);
+        --color-secondary-content: oklch(13.955% 0.027 168.327);
+        --color-accent: oklch(70.628% 0.119 185.713);
+        --color-accent-content: oklch(14.125% 0.023 185.713);
+        --color-neutral: oklch(30.698% 0.039 171.364);
+        --color-neutral-content: oklch(86.139% 0.007 171.364);
+        --color-info: oklch(72.06% 0.191 231.6);
+        --color-info-content: oklch(0% 0 0);
+        --color-success: oklch(64.8% 0.15 160);
+        --color-success-content: oklch(0% 0 0);
+        --color-warning: oklch(84.71% 0.199 83.87);
+        --color-warning-content: oklch(0% 0 0);
+        --color-error: oklch(71.76% 0.221 22.18);
+        --color-error-content: oklch(0% 0 0);
+        --radius-selector: 1rem;
+        --radius-field: 2rem;
+        --radius-box: 1rem;
+        --size-selector: 0.25rem;
+        --size-field: 0.25rem;
+        --border: 1px;
+        --depth: 0;
+        --noise: 0;
+      }
     </style>
   </head>
-  <body class="min-h-screen bg-slate-900 text-base-content antialiased flex flex-col items-center justify-start sm:py-4">
-    <!-- Contenedor Estrictamente Mobile-First (max-w-md) -->
-    <div class="w-full max-w-md min-h-screen sm:min-h-[92vh] sm:rounded-3xl flex flex-col bg-base-100 shadow-2xl relative overflow-x-hidden border border-slate-800/40">
+  <body class="min-h-screen bg-base-300 text-base-content antialiased flex flex-col items-center justify-start sm:py-4">
+    <!-- Contenedor Estrictamente Mobile-First (max-w-md) con tema Forest -->
+    <div class="w-full max-w-md min-h-screen sm:min-h-[92vh] sm:rounded-3xl flex flex-col bg-base-100 shadow-2xl relative overflow-x-hidden border border-base-content/10">
       
       <!-- Header Mobile-First -->
       <header class="navbar bg-base-100/95 backdrop-blur-md sticky top-0 z-40 border-b border-base-200 px-4 py-2">
         <div class="flex-1 items-center gap-2.5">
-          <div class="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center font-black shadow-md shadow-primary/30">
+          <div class="w-9 h-9 rounded-xl bg-primary text-primary-content flex items-center justify-center font-black shadow-md shadow-primary/20">
             ⏳
           </div>
           <div>
-            <h1 class="font-extrabold text-lg tracking-tight leading-none text-neutral">CRONOS</h1>
+            <h1 class="font-extrabold text-lg tracking-tight leading-none text-base-content">CRONOS</h1>
             <span class="text-[10px] text-primary font-bold uppercase tracking-wider">Control Financiero</span>
           </div>
         </div>

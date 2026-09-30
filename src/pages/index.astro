@@ -68,14 +68,14 @@ try {
     // Clasificación de color según requerimiento:
     // > 85%: progress-error | > 60%: progress-warning | < 60%: progress-success
     let progressClass = 'progress-success';
-    let badgeClass = 'badge-success text-white';
+    let badgeClass = 'badge-success text-success-content font-bold';
 
     if (percentage > 85) {
       progressClass = 'progress-error';
-      badgeClass = 'badge-error text-white font-bold';
+      badgeClass = 'badge-error text-error-content font-extrabold';
     } else if (percentage > 60) {
       progressClass = 'progress-warning';
-      badgeClass = 'badge-warning text-neutral font-semibold';
+      badgeClass = 'badge-warning text-warning-content font-bold';
     }
 
     const isLeak = cat.name.toLowerCase().includes('suscrip') || cat.name.toLowerCase().includes('hormiga');
@@ -122,7 +122,6 @@ try {
   }));
 } catch (error) {
   dbConfigured = false;
-  // Datos representativos iniciales si la DB aún no ha sido migrada
   categoriesList = [
     {
       id: 1,
@@ -132,7 +131,7 @@ try {
       remaining: 120.0,
       percentage: 90,
       progressClass: 'progress-error',
-      badgeClass: 'badge-error text-white font-bold',
+      badgeClass: 'badge-error text-error-content font-extrabold',
       icon: '💻',
       isLeakWarning: true,
     },
@@ -144,7 +143,7 @@ try {
       remaining: 510.0,
       percentage: 66,
       progressClass: 'progress-warning',
-      badgeClass: 'badge-warning text-neutral font-semibold',
+      badgeClass: 'badge-warning text-warning-content font-bold',
       icon: '🐜',
       isLeakWarning: true,
     },
@@ -156,7 +155,7 @@ try {
       remaining: 4300.0,
       percentage: 42,
       progressClass: 'progress-success',
-      badgeClass: 'badge-success text-white',
+      badgeClass: 'badge-success text-success-content font-bold',
       icon: '🛒',
       isLeakWarning: false,
     },
@@ -168,7 +167,7 @@ try {
       remaining: 1350.0,
       percentage: 55,
       progressClass: 'progress-success',
-      badgeClass: 'badge-success text-white',
+      badgeClass: 'badge-success text-success-content font-bold',
       icon: '⛽',
       isLeakWarning: false,
     },
@@ -184,13 +183,13 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
 <Layout title="Control CRONOS">
   <!-- ALERTA PROACTIVA OBLIGATORIA (Días 17 al 20) -->
   {isDebtAlertActive && (
-    <div class="alert alert-warning shadow-lg mb-4 flex items-start gap-2.5 border-l-4 border-amber-600 animate-pulse">
-      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6 text-amber-900 mt-0.5" fill="none" viewBox="0 0 24 24">
+    <div class="alert alert-warning shadow-xl mb-4 flex items-start gap-2.5 border-l-4 border-warning text-warning-content animate-pulse">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6 mt-0.5" fill="none" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
       <div>
-        <h4 class="font-extrabold text-sm text-amber-950">¡Compromiso Crítico!</h4>
-        <p class="text-xs text-amber-900 font-semibold leading-snug">
+        <h4 class="font-extrabold text-sm uppercase tracking-wide">¡Compromiso Crítico!</h4>
+        <p class="text-xs font-bold leading-snug">
           ¡Atención! Separa L. 4,400 para tarjetas/préstamo el día 20.
         </p>
       </div>
@@ -199,40 +198,40 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
 
   <!-- Banner Informativo de Conexión a Neon si no está conectada -->
   {!dbConfigured && (
-    <div class="alert alert-info shadow-sm mb-4 text-xs py-2">
+    <div class="alert alert-info shadow-sm mb-4 text-xs py-2 text-info-content">
       <span>💡 Modo local de demostración. Configura <code class="font-bold">DATABASE_URL</code> en <code class="font-bold">.env</code> para sincronizar con Neon.</span>
     </div>
   )}
 
-  <!-- Tarjeta Resumen Financiero: Salario & Control Global -->
-  <section class="card bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 text-white shadow-xl mb-5 border border-blue-900/40">
+  <!-- Tarjeta Resumen Financiero: Salario & Control Global (Forest Palette) -->
+  <section class="card bg-base-200 border border-base-300 shadow-2xl mb-5 text-base-content overflow-hidden">
     <div class="card-body p-4.5">
       <div class="flex justify-between items-start">
         <div>
-          <span class="text-[11px] font-bold tracking-wider text-blue-300 uppercase">Salario Mensual</span>
-          <h2 class="text-2xl font-black tracking-tight text-white mt-0.5">
+          <span class="text-[11px] font-bold tracking-wider text-primary uppercase">Salario Mensual</span>
+          <h2 class="text-2xl font-black tracking-tight text-base-content mt-0.5">
             L. {MONTHLY_SALARY.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
           </h2>
         </div>
-        <div class="badge badge-primary font-bold text-xs py-2 px-2.5">
+        <div class="badge badge-primary text-primary-content font-extrabold text-xs py-2 px-2.5">
           {currentMonthLabel}
         </div>
       </div>
 
       <!-- Métricas Clave -->
-      <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/10 text-xs">
-        <div class="bg-white/5 p-2 rounded-xl">
-          <span class="text-white/60 block text-[10px]">Deuda Fija (Día 20):</span>
-          <span class="font-bold text-amber-400">L. {FIXED_DEBT_AMOUNT.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
+      <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-base-300 text-xs">
+        <div class="bg-base-300/60 p-2.5 rounded-xl border border-base-content/5">
+          <span class="text-base-content/60 block text-[10px] font-semibold">Deuda Fija (Día 20):</span>
+          <span class="font-extrabold text-warning">L. {FIXED_DEBT_AMOUNT.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
         </div>
-        <div class="bg-white/5 p-2 rounded-xl">
-          <span class="text-white/60 block text-[10px]">Gastado en el Mes:</span>
-          <span class="font-bold text-rose-400">L. {totalSpent.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
+        <div class="bg-base-300/60 p-2.5 rounded-xl border border-base-content/5">
+          <span class="text-base-content/60 block text-[10px] font-semibold">Gastado en el Mes:</span>
+          <span class="font-extrabold text-error">L. {totalSpent.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</span>
         </div>
       </div>
 
-      <div class="mt-2 text-center text-[11px] text-blue-200/80 font-medium">
-        Saldo Libre Real Estimado: <strong class="text-white font-extrabold">L. {disposableSalary.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</strong>
+      <div class="mt-2.5 text-center text-xs text-base-content/80 font-medium bg-primary/10 py-1.5 px-2 rounded-xl border border-primary/20">
+        Saldo Libre Estimado: <strong class="text-primary font-black">L. {disposableSalary.toLocaleString('es-HN', { minimumFractionDigits: 2 })}</strong>
       </div>
     </div>
   </section>
@@ -240,7 +239,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
   <!-- Dashboard de Categorías con Barras de Progreso DaisyUI -->
   <section class="mb-6">
     <div class="flex justify-between items-center mb-3">
-      <h3 class="font-extrabold text-sm text-neutral flex items-center gap-1.5 uppercase tracking-wide">
+      <h3 class="font-extrabold text-sm text-base-content flex items-center gap-1.5 uppercase tracking-wide">
         🛡️ Categorías & Bloqueos Duros
       </h3>
       <span class="text-[11px] text-base-content/60 font-semibold">{categoriesList.length} Categorías</span>
@@ -248,14 +247,14 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
 
     <div class="space-y-3">
       {categoriesList.map((cat) => (
-        <div class="card bg-base-100 border border-base-200 shadow-sm p-3.5 hover:border-primary/40 transition-all">
+        <div class="card bg-base-200 border border-base-300 shadow-md p-3.5 hover:border-primary/40 transition-all">
           <div class="flex justify-between items-center mb-1.5">
             <div class="flex items-center gap-2">
               <span class="text-lg">{cat.icon}</span>
               <div>
-                <span class="font-bold text-sm text-neutral block leading-tight">{cat.name}</span>
+                <span class="font-bold text-sm text-base-content block leading-tight">{cat.name}</span>
                 {cat.isLeakWarning && (
-                  <span class="badge badge-outline badge-error text-[9px] py-0 px-1 font-bold">Fuga Detectada</span>
+                  <span class="badge badge-error text-error-content text-[9px] py-0 px-1.5 font-black">Fuga Detectada</span>
                 )}
               </div>
             </div>
@@ -264,21 +263,21 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
             </span>
           </div>
 
-          <!-- Barra de Progreso DaisyUI con Reglas de Negocio -->
+          <!-- Barra de Progreso DaisyUI -->
           <!-- > 85%: progress-error | > 60%: progress-warning | < 60%: progress-success -->
           <progress
-            class={`progress ${cat.progressClass} w-full h-2.5 my-1`}
+            class={`progress ${cat.progressClass} w-full h-2.5 my-1.5`}
             value={cat.currentSpent}
             max={cat.monthlyLimit}
           ></progress>
 
           <div class="flex justify-between items-center text-xs text-base-content/70 font-medium mt-0.5">
-            <span>Gastado: <strong class="text-neutral font-bold">L. {cat.currentSpent.toFixed(2)}</strong></span>
+            <span>Gastado: <strong class="text-base-content font-bold">L. {cat.currentSpent.toFixed(2)}</strong></span>
             <span>Límite: L. {cat.monthlyLimit.toFixed(2)}</span>
           </div>
 
           {cat.percentage >= 100 && (
-            <div class="text-[10px] text-error font-extrabold mt-1.5 flex items-center gap-1 bg-error/10 p-1 rounded-lg">
+            <div class="text-[10px] text-error font-extrabold mt-1.5 flex items-center gap-1 bg-error/15 p-1.5 rounded-lg border border-error/30">
               🛑 <span>Hard Stop Activo: No se permiten más gastos en esta categoría.</span>
             </div>
           )}
@@ -290,20 +289,20 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
   <!-- Historial Reciente de Gastos -->
   {recentTransactions.length > 0 && (
     <section class="mb-4">
-      <h3 class="font-extrabold text-sm text-neutral flex items-center gap-1.5 uppercase tracking-wide mb-2.5">
+      <h3 class="font-extrabold text-sm text-base-content flex items-center gap-1.5 uppercase tracking-wide mb-2.5">
         ⏱️ Últimos Movimientos
       </h3>
       <div class="space-y-2">
         {recentTransactions.map((item) => (
-          <div class="card bg-base-100 border border-base-200 shadow-sm p-2.5 flex flex-row items-center justify-between">
+          <div class="card bg-base-200 border border-base-300 shadow-sm p-3 flex flex-row items-center justify-between">
             <div class="flex items-center gap-2.5">
               <span class="text-base">{item.icon}</span>
               <div>
-                <p class="font-bold text-xs text-neutral leading-tight">{item.description}</p>
+                <p class="font-bold text-xs text-base-content leading-tight">{item.description}</p>
                 <p class="text-[10px] text-base-content/60">{item.categoryName} • {item.formattedDate}</p>
               </div>
             </div>
-            <span class="font-extrabold text-xs text-neutral">L. {item.amount}</span>
+            <span class="font-extrabold text-xs text-primary">L. {item.amount}</span>
           </div>
         ))}
       </div>
@@ -314,7 +313,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
   <button
     id="btn-open-fab"
     type="button"
-    class="btn btn-circle btn-primary shadow-2xl fixed bottom-6 right-6 z-40 text-white text-2xl font-black hover:scale-110 active:scale-95 transition-transform"
+    class="btn btn-circle btn-primary text-primary-content shadow-2xl fixed bottom-6 right-6 z-40 text-2xl font-black hover:scale-110 active:scale-95 transition-transform"
     title="Registrar Gasto Rápido"
   >
     +
@@ -322,9 +321,9 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
 
   <!-- Dialog / Bottom Sheet Modal de DaisyUI -->
   <dialog id="modal_quick_expense" class="modal modal-bottom sm:modal-middle">
-    <div class="modal-box p-5 bg-base-100 max-w-md mx-auto">
+    <div class="modal-box p-5 bg-base-200 border border-base-300 text-base-content max-w-md mx-auto shadow-2xl">
       <div class="flex justify-between items-center mb-3">
-        <h3 class="font-black text-base text-neutral flex items-center gap-1.5">
+        <h3 class="font-black text-base text-base-content flex items-center gap-1.5">
           ⚡ Registrar Gasto Rápido
         </h3>
         <form method="dialog">
@@ -348,7 +347,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
               min="0.01"
               placeholder="0.00"
               required
-              class="text-4xl text-center font-black input input-ghost w-48 border-b-2 border-primary focus:outline-none focus:border-primary text-neutral"
+              class="text-4xl text-center font-black input input-ghost w-48 border-b-2 border-primary focus:outline-none focus:border-primary text-base-content"
             />
           </div>
         </div>
@@ -356,9 +355,9 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
         <!-- Selector de Categorías -->
         <div class="form-control">
           <label class="label py-1">
-            <span class="label-text text-xs font-bold">Categoría</span>
+            <span class="label-text text-xs font-bold text-base-content">Categoría</span>
           </label>
-          <select id="quick_category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100 font-semibold">
+          <select id="quick_category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100 text-base-content font-semibold">
             <option value="" disabled selected>Selecciona categoría...</option>
             {categoriesList.map((c) => (
               <option value={c.id}>
@@ -371,14 +370,14 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
         <!-- Descripción -->
         <div class="form-control">
           <label class="label py-1">
-            <span class="label-text text-xs font-bold">Descripción</span>
+            <span class="label-text text-xs font-bold text-base-content">Descripción</span>
           </label>
           <input
             type="text"
             id="quick_description"
             name="description"
             placeholder="Ej. Café, suscripción, almuerzo..."
-            class="input input-bordered input-sm w-full font-medium"
+            class="input input-bordered input-sm w-full bg-base-100 text-base-content font-medium"
           />
         </div>
 
@@ -386,7 +385,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
         <button
           type="submit"
           id="btn-submit-quick"
-          class="btn btn-primary btn-block font-extrabold normal-case text-white text-sm mt-3 shadow-lg"
+          class="btn btn-primary text-primary-content btn-block font-extrabold normal-case text-sm mt-3 shadow-lg"
         >
           <span id="btn-quick-text">Aplicar Gasto</span>
           <span id="btn-quick-spinner" class="loading loading-spinner loading-xs hidden"></span>
@@ -422,7 +421,7 @@ const disposableSalary = MONTHLY_SALARY - FIXED_DEBT_AMOUNT - totalSpent;
     if (!toastContainer) return;
 
     const toastDiv = document.createElement('div');
-    toastDiv.className = `alert ${isError ? 'alert-error text-white' : 'alert-success text-white'} shadow-2xl text-xs font-extrabold flex items-center gap-2 pointer-events-auto transition-all animate-bounce`;
+    toastDiv.className = `alert ${isError ? 'alert-error text-error-content' : 'alert-success text-success-content'} shadow-2xl text-xs font-extrabold flex items-center gap-2 pointer-events-auto transition-all animate-bounce border border-base-content/20`;
     toastDiv.innerHTML = `
       <span>${isError ? '🛑' : '✅'}</span>
       <span>${message}</span>
