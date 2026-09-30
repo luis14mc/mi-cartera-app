@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, numeric, integer, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, numeric, integer, timestamp, boolean, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // 1. Tabla de Categorías con iconos y límites mensuales
@@ -10,17 +10,25 @@ export const categories = pgTable('categories', {
   payment_method_default: varchar('payment_method_default', { length: 30 }).default('DEBITO_EFECTIVO'),
 });
 
-// 2. Tabla de Transacciones para control de gastos
-export const transactions = pgTable('transactions', {
-  id: serial('id').primaryKey(),
-  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-  category_id: integer('category_id')
-    .notNull()
-    .references(() => categories.id, { onDelete: 'cascade' }),
-  description: varchar('description', { length: 255 }),
-  payment_method: varchar('payment_method', { length: 30 }).notNull().default('DEBITO_EFECTIVO'),
-  date: timestamp('date', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
-});
+// 2. Tabla de Transacciones con índices optimizados para Neon Postgres
+export const transactions = pgTable(
+  'transactions',
+  {
+    id: serial('id').primaryKey(),
+    amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+    category_id: integer('category_id')
+      .notNull()
+      .references(() => categories.id, { onDelete: 'cascade' }),
+    description: varchar('description', { length: 255 }),
+    payment_method: varchar('payment_method', { length: 30 }).notNull().default('DEBITO_EFECTIVO'),
+    date: timestamp('date', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('idx_transactions_category_id').on(table.category_id),
+    index('idx_transactions_date').on(table.date),
+    index('idx_transactions_cat_date').on(table.category_id, table.date),
+  ]
+);
 
 // 3. Tabla de Pagos Programados / Deuda fija recurrente
 export const scheduled_payments = pgTable('scheduled_payments', {

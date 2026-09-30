@@ -770,26 +770,27 @@ const overallSpentPct = variableBudgetTotal > 0
   <button
     id="btn-open-fab"
     type="button"
-    class="w-14 h-14 rounded-full bg-primary text-on-primary shadow-[0_4px_20px_rgba(30,184,84,0.35)] fixed bottom-20 right-6 z-40 flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
+    class="w-14 h-14 rounded-full bg-primary text-on-primary shadow-[0_4px_20px_rgba(30,184,84,0.35)] fixed bottom-20 right-6 z-40 flex items-center justify-center hover:scale-105 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-primary"
     title="Añadir transacción"
+    aria-label="Registrar nueva transacción"
   >
     <span class="material-symbols-outlined text-[28px]">add</span>
   </button>
 
   <!-- MODAL / BOTTOM SHEET: NUEVO GASTO (CANOPY NOCTURNE DESIGN SYSTEM) -->
-  <dialog id="modal_quick_expense" class="modal modal-bottom sm:modal-middle">
+  <dialog id="modal_quick_expense" class="modal modal-bottom sm:modal-middle" aria-labelledby="modal_quick_title" aria-modal="true">
     <div class="modal-box p-5 bg-surface-container border border-outline-variant/30 text-on-surface max-w-md mx-auto shadow-2xl rounded-t-3xl sm:rounded-3xl">
       <div class="flex justify-between items-center mb-3">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
             <span class="material-symbols-outlined text-[19px]">add_circle</span>
           </div>
-          <h3 class="font-bold text-base text-on-surface font-headline">
+          <h3 id="modal_quick_title" class="font-bold text-base text-on-surface font-headline">
             Nueva Transacción
           </h3>
         </div>
         <form method="dialog">
-          <button class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center hover:text-on-surface transition-colors">
+          <button class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center hover:text-on-surface transition-colors" aria-label="Cerrar modal de nueva transacción">
             <span class="material-symbols-outlined text-[18px]">close</span>
           </button>
         </form>
@@ -919,14 +920,14 @@ const overallSpentPct = variableBudgetTotal > 0
   </dialog>
 
   <!-- MODAL DE ADVERTENCIA ROJA: BLOQUEO DE PLÁSTICO (INTERCEPCIÓN) -->
-  <dialog id="modal_plastic_warning" class="modal modal-bottom sm:modal-middle">
+  <dialog id="modal_plastic_warning" class="modal modal-bottom sm:modal-middle" aria-labelledby="modal_plastic_title" aria-modal="true">
     <div class="modal-box p-5 bg-surface-container border-2 border-error text-on-surface max-w-md mx-auto shadow-2xl rounded-t-3xl sm:rounded-3xl">
       <div class="flex items-start gap-3">
         <div class="w-12 h-12 rounded-2xl bg-error-container/30 text-error flex items-center justify-center text-2xl font-black shrink-0 border border-error/30 animate-pulse">
           <span class="material-symbols-outlined text-[26px]">block</span>
         </div>
         <div>
-          <h3 class="font-extrabold text-base text-error uppercase tracking-tight font-headline">
+          <h3 id="modal_plastic_title" class="font-extrabold text-base text-error uppercase tracking-tight font-headline">
             ¡ALTO LUIS!
           </h3>
           <p class="text-xs text-on-surface font-medium mt-1 leading-relaxed">

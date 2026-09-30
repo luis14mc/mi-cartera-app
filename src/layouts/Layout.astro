@@ -18,6 +18,23 @@ const { title, activeTab = 'dashboard' } = Astro.props;
     <meta name="generator" content={Astro.generator} />
     <title>{title} | Control CRONOS</title>
     
+    <!-- SEO Meta Tags (Auditado según Skill SEO) -->
+    <meta name="description" content="Control CRONOS - Gestión financiera inteligente en Modo Supervivencia, control estricto de presupuesto, compromisos intocables y métricas en tiempo real." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://mi-cartera-app.vercel.app/" />
+
+    <!-- Open Graph / Redes Sociales -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={`${title} | Control CRONOS`} />
+    <meta property="og:description" content="Gestión financiera personal y control de presupuesto en Modo Supervivencia." />
+    <meta property="og:locale" content="es_HN" />
+    <meta property="og:site_name" content="Control CRONOS" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={`${title} | Control CRONOS`} />
+    <meta name="twitter:description" content="Gestión financiera personal y control de presupuesto en Modo Supervivencia." />
+
     <!-- PWA Settings con tema Forest -->
     <meta name="theme-color" content="#181313" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -40,6 +57,11 @@ const { title, activeTab = 'dashboard' } = Astro.props;
       h1, h2, h3, h4, .font-headline {
         font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
       }
+      /* Accesibilidad: Indicadores de foco visibles para teclado (WCAG 2.2) */
+      :focus-visible {
+        outline: 2px solid oklch(68.628% 0.185 148.958) !important;
+        outline-offset: 2px !important;
+      }
     </style>
   </head>
   <body class="min-h-screen bg-surface-container-lowest text-on-surface antialiased flex flex-col items-center justify-start sm:py-4">
@@ -61,19 +83,20 @@ const { title, activeTab = 'dashboard' } = Astro.props;
           </div>
         </div>
         <div class="flex-none flex items-center gap-1.5">
-          <!-- Botón de Instalación en Celular con efecto Liquid Glass -->
+          <!-- Botón de Instalación en Celular con efecto Liquid Glass y accesibilidad WCAG -->
           <button
             id="btn-header-install"
             type="button"
-            class="btn-trigger-pwa-install flex items-center gap-1 liquid-glass hover:bg-primary hover:text-on-primary text-secondary px-2.5 py-1 rounded-full text-xs font-semibold transition-all shadow-sm active:scale-95"
+            class="btn-trigger-pwa-install flex items-center gap-1 liquid-glass hover:bg-primary hover:text-on-primary text-secondary px-3 py-1.5 min-h-[38px] rounded-full text-xs font-semibold transition-all shadow-sm active:scale-95 focus-visible:ring-2 focus-visible:ring-primary"
             title="Instalar en tu Celular"
+            aria-label="Instalar app Control CRONOS en tu celular"
           >
             <span class="material-symbols-outlined text-[17px]">install_mobile</span>
             <span class="text-[11px] font-medium hidden sm:inline">Instalar</span>
           </button>
 
           <!-- Avatar del Usuario con aura de vidrio -->
-          <div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-primary font-bold text-xs shadow-sm">
+          <div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-primary font-bold text-xs shadow-sm" aria-label="Usuario actual">
             <span class="material-symbols-outlined text-[18px]">person</span>
           </div>
         </div>
@@ -85,7 +108,7 @@ const { title, activeTab = 'dashboard' } = Astro.props;
       </main>
 
       <!-- Bottom Navigation Bar Liquid Glass con Safe Area Bottom para Home Indicator -->
-      <nav class="fixed bottom-0 w-full max-w-[430px] z-40 liquid-glass-nav pb-safe">
+      <nav class="fixed bottom-0 w-full max-w-[430px] z-40 liquid-glass-nav pb-safe" aria-label="Navegación principal de la aplicación">
         <div class="flex justify-around items-center h-16 px-3">
           <a
             href="/"
@@ -94,6 +117,7 @@ const { title, activeTab = 'dashboard' } = Astro.props;
                 ? 'text-primary font-bold liquid-glass-pill scale-[1.03]'
                 : 'text-on-surface-variant hover:text-on-surface active:scale-95'
             }`}
+            aria-label="Ir al Dashboard principal"
           >
             <span class="material-symbols-outlined text-[21px]">grid_view</span>
             <span class="text-[10px] font-medium tracking-tight">Dashboard</span>
@@ -108,6 +132,7 @@ const { title, activeTab = 'dashboard' } = Astro.props;
                 ? 'text-primary font-bold liquid-glass-pill scale-[1.03]'
                 : 'text-on-surface-variant hover:text-on-surface active:scale-95'
             }`}
+            aria-label="Ir a Gastos e Histórico"
           >
             <span class="material-symbols-outlined text-[21px]">receipt_long</span>
             <span class="text-[10px] font-medium tracking-tight">Gastos</span>
@@ -122,6 +147,7 @@ const { title, activeTab = 'dashboard' } = Astro.props;
                 ? 'text-primary font-bold liquid-glass-pill scale-[1.03]'
                 : 'text-on-surface-variant hover:text-on-surface active:scale-95'
             }`}
+            aria-label="Ir a Pagos y Compromisos Intocables"
           >
             <span class="material-symbols-outlined text-[21px]">payments</span>
             <span class="text-[10px] font-medium tracking-tight">Pagos</span>
@@ -132,6 +158,7 @@ const { title, activeTab = 'dashboard' } = Astro.props;
           <button
             type="button"
             class="btn-trigger-pwa-install flex flex-col items-center justify-center min-w-[64px] min-h-[46px] px-3 py-1 rounded-2xl gap-0.5 text-secondary hover:text-primary transition-all active:scale-95"
+            aria-label="Abrir guía de instalación en celular"
           >
             <span class="material-symbols-outlined text-[21px]">install_mobile</span>
             <span class="text-[10px] font-medium tracking-tight">Instalar</span>
@@ -140,7 +167,7 @@ const { title, activeTab = 'dashboard' } = Astro.props;
       </nav>
 
       <!-- MODAL GUÍA DE INSTALACIÓN PWA -->
-      <dialog id="modal_pwa_install" class="modal modal-bottom sm:modal-middle">
+      <dialog id="modal_pwa_install" class="modal modal-bottom sm:modal-middle" aria-labelledby="modal_pwa_title" aria-modal="true">
         <div class="modal-box p-5 bg-surface-container border border-outline-variant/30 text-on-surface max-w-[390px] mx-auto shadow-2xl rounded-t-3xl sm:rounded-3xl">
           <div class="flex justify-between items-center mb-3">
             <div class="flex items-center gap-2">
@@ -148,14 +175,14 @@ const { title, activeTab = 'dashboard' } = Astro.props;
                 <span class="material-symbols-outlined text-[22px]">install_mobile</span>
               </div>
               <div>
-                <h3 class="font-bold text-base text-on-surface font-headline leading-tight">
+                <h3 id="modal_pwa_title" class="font-bold text-base text-on-surface font-headline leading-tight">
                   Instalar en tu Celular
                 </h3>
                 <span class="text-[10px] text-primary font-medium">Control CRONOS PWA</span>
               </div>
             </div>
             <form method="dialog">
-              <button class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center hover:text-on-surface transition-colors">
+              <button class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center hover:text-on-surface transition-colors" aria-label="Cerrar modal de instalación">
                 <span class="material-symbols-outlined text-[18px]">close</span>
               </button>
             </form>
@@ -217,9 +244,14 @@ const { title, activeTab = 'dashboard' } = Astro.props;
       <div id="toast-container" class="toast toast-top toast-center z-50 pointer-events-none w-full max-w-xs transition-all"></div>
     </div>
 
-    <!-- PWA Service Worker & Install Prompt Controller -->
+    <!-- PWA Service Worker & Install Prompt Controller (TypeScript Strict) -->
     <script>
-      let deferredInstallPrompt: any = null;
+      interface BeforeInstallPromptEvent extends Event {
+        prompt(): Promise<void>;
+        userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+      }
+
+      let deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
 
       const modalPwa = document.getElementById('modal_pwa_install') as HTMLDialogElement;
       const btnNativeInstall = document.getElementById('btn-pwa-native-install') as HTMLButtonElement;
@@ -228,7 +260,7 @@ const { title, activeTab = 'dashboard' } = Astro.props;
       const installedSection = document.getElementById('pwa-installed-section') as HTMLDivElement;
 
       // Detectar si ya está en modo Standalone (App instalada)
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || ('standalone' in window.navigator && Boolean((window.navigator as unknown as { standalone: boolean }).standalone));
       const isIos = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
 
       if (isStandalone) {

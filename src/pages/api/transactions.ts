@@ -4,6 +4,14 @@ import { eq, and, gte, lte, desc } from 'drizzle-orm';
 
 export const prerender = false;
 
+interface CreateTransactionPayload {
+  amount?: number | string;
+  category_id?: number | string;
+  description?: string | null;
+  date?: string | null;
+  payment_method?: string;
+}
+
 // GET: Consultar transacciones recientes
 export const GET: APIRoute = async () => {
   try {
@@ -27,9 +35,10 @@ export const GET: APIRoute = async () => {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Error al obtener transacciones';
     return new Response(
-      JSON.stringify({ error: error.message || 'Error al obtener transacciones' }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
@@ -38,7 +47,7 @@ export const GET: APIRoute = async () => {
 // POST: Registrar gasto con Bloqueo Duro (Hard Stop) si supera el límite
 export const POST: APIRoute = async ({ request }) => {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as CreateTransactionPayload;
     const { amount, category_id, description, date, payment_method } = body;
 
     const parsedAmount = Number(amount);
@@ -171,10 +180,11 @@ export const POST: APIRoute = async ({ request }) => {
         headers: { 'Content-Type': 'application/json' },
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error en POST /api/transactions:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error interno del servidor.';
     return new Response(
-      JSON.stringify({ error: error.message || 'Error interno del servidor.' }),
+      JSON.stringify({ error: errorMessage }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
