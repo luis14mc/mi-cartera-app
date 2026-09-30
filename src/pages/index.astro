@@ -22,9 +22,10 @@ interface CategoryItem {
   currentSpent: number;
   remaining: number;
   percentage: number;
-  progressClass: string;
+  barColorClass: string;
   badgeClass: string;
   icon: string;
+  materialIcon: string;
   isOcioDanger: boolean;
   isHardStopTriggered: boolean;
   isUntouchable: boolean;
@@ -44,8 +45,21 @@ let recentTransactions: Array<{
   paymentMethod: string;
   categoryName: string;
   icon: string;
+  materialIcon: string;
   formattedDate: string;
 }> = [];
+
+// Helper para mapear iconos a Material Symbols Outlined
+function getMaterialIcon(name: string, defaultIcon: string = 'label'): string {
+  const n = name.toLowerCase();
+  if (n.includes('maestr')) return 'school';
+  if (n.includes('deuda') || n.includes('préstamo')) return 'account_balance';
+  if (n.includes('supermercado') || n.includes('alimento')) return 'restaurant';
+  if (n.includes('gasolina') || n.includes('transporte')) return 'local_gas_station';
+  if (n.includes('ocio') || n.includes('hormiga')) return 'sports_esports';
+  if (n.includes('software') || n.includes('tecnología')) return 'laptop';
+  return defaultIcon;
+}
 
 try {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
@@ -77,16 +91,16 @@ try {
     const isOcio = lowerName.includes('ocio') || lowerName.includes('hormiga');
 
     // Regla de Negocio: En "Ocio y Hormiga", si supera L. 1,000 se vuelve ROJO inmediatamente
-    let progressClass = 'progress-success';
-    let badgeClass = 'badge-success text-success-content font-bold';
+    let barColorClass = 'bg-primary';
+    let badgeClass = 'text-primary bg-primary/10';
     const isOcioDanger = isOcio && spent > 1000;
 
     if (isOcioDanger || percentage > 85) {
-      progressClass = 'progress-error';
-      badgeClass = 'badge-error text-error-content font-extrabold';
+      barColorClass = 'bg-error';
+      badgeClass = 'text-error bg-error/15';
     } else if (percentage > 60) {
-      progressClass = 'progress-warning';
-      badgeClass = 'badge-warning text-warning-content font-bold';
+      barColorClass = 'bg-secondary';
+      badgeClass = 'text-secondary bg-secondary/10';
     }
 
     const item: CategoryItem = {
@@ -96,9 +110,10 @@ try {
       currentSpent: spent,
       remaining,
       percentage,
-      progressClass,
+      barColorClass,
       badgeClass,
       icon: cat.icon || '📌',
+      materialIcon: getMaterialIcon(cat.name),
       isOcioDanger,
       isHardStopTriggered: !isUntouchable && spent >= limit,
       isUntouchable,
@@ -142,6 +157,7 @@ try {
     paymentMethod: t.paymentMethod || 'DEBITO_EFECTIVO',
     categoryName: t.categoryName || 'General',
     icon: t.icon || '🏷️',
+    materialIcon: getMaterialIcon(t.categoryName || ''),
     formattedDate: new Date(t.date).toLocaleDateString('es-HN', {
       day: 'numeric',
       month: 'short',
@@ -158,9 +174,10 @@ try {
       currentSpent: 0.0,
       remaining: 4350.0,
       percentage: 0,
-      progressClass: '',
-      badgeClass: '',
+      barColorClass: 'bg-primary',
+      badgeClass: 'text-primary bg-primary/10',
       icon: '🎓',
+      materialIcon: 'school',
       isOcioDanger: false,
       isHardStopTriggered: false,
       isUntouchable: true,
@@ -173,9 +190,10 @@ try {
       currentSpent: 0.0,
       remaining: 4400.0,
       percentage: 0,
-      progressClass: '',
-      badgeClass: '',
+      barColorClass: 'bg-primary',
+      badgeClass: 'text-primary bg-primary/10',
       icon: '🏦',
+      materialIcon: 'account_balance',
       isOcioDanger: false,
       isHardStopTriggered: false,
       isUntouchable: true,
@@ -191,9 +209,10 @@ try {
       currentSpent: 0.0,
       remaining: 4000.0,
       percentage: 0,
-      progressClass: 'progress-success',
-      badgeClass: 'badge-success text-success-content font-bold',
+      barColorClass: 'bg-primary',
+      badgeClass: 'text-primary bg-primary/10',
       icon: '🛒',
+      materialIcon: 'restaurant',
       isOcioDanger: false,
       isHardStopTriggered: false,
       isUntouchable: false,
@@ -206,9 +225,10 @@ try {
       currentSpent: 0.0,
       remaining: 2000.0,
       percentage: 0,
-      progressClass: 'progress-success',
-      badgeClass: 'badge-success text-success-content font-bold',
+      barColorClass: 'bg-primary',
+      badgeClass: 'text-primary bg-primary/10',
       icon: '⛽',
+      materialIcon: 'local_gas_station',
       isOcioDanger: false,
       isHardStopTriggered: false,
       isUntouchable: false,
@@ -221,9 +241,10 @@ try {
       currentSpent: 0.0,
       remaining: 1500.0,
       percentage: 0,
-      progressClass: 'progress-success',
-      badgeClass: 'badge-success text-success-content font-bold',
+      barColorClass: 'bg-primary',
+      badgeClass: 'text-primary bg-primary/10',
       icon: '🐜',
+      materialIcon: 'sports_esports',
       isOcioDanger: false,
       isHardStopTriggered: false,
       isUntouchable: false,
@@ -236,9 +257,10 @@ try {
       currentSpent: 0.0,
       remaining: 1500.0,
       percentage: 0,
-      progressClass: 'progress-success',
-      badgeClass: 'badge-success text-success-content font-bold',
+      barColorClass: 'bg-primary',
+      badgeClass: 'text-primary bg-primary/10',
       icon: '💻',
+      materialIcon: 'laptop',
       isOcioDanger: false,
       isHardStopTriggered: false,
       isUntouchable: false,
@@ -251,373 +273,406 @@ try {
   totalUntouchableSpent = 0.0;
 }
 
-const currentMonthLabel = 'Octubre 2026';
-
 // 🛑 MATEMÁTICA ESTRICTA DE LIQUIDEZ REAL:
 // Los L. 8,750 (Maestría 4,350 + Deuda 4,400) se restan automáticamente desde el día 1.
-// La liquidez restante real del usuario parte de L. 17,768.00 y se reduce con cada gasto variable.
-const initialRealLiquidity = MONTHLY_SALARY - UNTOUCHABLE_COMMITMENTS_TOTAL;
+const initialRealLiquidity = MONTHLY_SALARY - UNTOUCHABLE_COMMITMENTS_TOTAL; // L. 17,768.00
 const disposableSalary = initialRealLiquidity - totalVariableSpent;
-const totalSpentAll = totalVariableSpent + totalUntouchableSpent;
+const variableBudgetTotal = variableCategories.reduce((acc, c) => acc + c.monthlyLimit, 0);
+const overallSpentPct = variableBudgetTotal > 0
+  ? Math.min(100, Math.round((totalVariableSpent / variableBudgetTotal) * 100))
+  : 0;
 ---
 
 <Layout title="CRONOS - MODO RESCATE (OCTUBRE)">
-  <!-- ALERTA DE RESCATE: PÉRDIDA DE PERIODO DE GRACIA -->
-  <div class="alert alert-error shadow-xl mb-4 border-2 border-error/50 bg-error/15 text-base-content flex items-start gap-2.5">
-    <span class="text-2xl mt-0.5">⚠️</span>
-    <div>
-      <div class="flex items-center gap-1.5 flex-wrap">
-        <h4 class="font-black text-xs uppercase tracking-wider text-error">
-          MODO SUPERVIVENCIA ACTIVO
-        </h4>
-        <span class="badge badge-error text-error-content badge-xs font-black">SIN GRACIA</span>
-      </div>
-      <p class="text-[11px] font-bold leading-tight mt-0.5">
-        Has perdido el periodo de gracia en tus tarjetas este mes. Todo cobro a crédito generará intereses inmediatos. <strong>Usa Débito o Efectivo</strong>.
-      </p>
-    </div>
-  </div>
+  <div class="flex flex-col gap-4 text-on-surface">
 
-  <!-- ALERTA PROACTIVA DE DEUDA FIJA (Días 17 al 20) -->
-  {isDebtAlertActive && (
-    <div class="alert alert-warning shadow-xl mb-4 flex items-start gap-2.5 border-l-4 border-warning text-warning-content animate-pulse">
-      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6 mt-0.5" fill="none" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-      <div>
-        <h4 class="font-extrabold text-sm uppercase tracking-wide">¡Compromiso Crítico!</h4>
-        <p class="text-xs font-bold leading-snug">
-          ¡Atención! Separa L. 4,400 para tarjetas/préstamo el día 20.
+    <!-- TAG DE ESTADO Y CONTEXTO SERVERLESS -->
+    <div class="flex items-center justify-between pt-1">
+      <div class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-low text-on-surface-variant text-[11px] border border-outline-variant/15">
+        <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+        <span class="font-semibold uppercase tracking-wider">Validación SSR Activa</span>
+      </div>
+      <span class="text-[11px] text-tertiary font-medium">Neon DB Synced</span>
+    </div>
+
+    <!-- ALERTA DE RESCATE: PÉRDIDA DE PERIODO DE GRACIA -->
+    <div class="rounded-2xl bg-surface-container-low p-3.5 border border-error/30 shadow-md flex items-start gap-3">
+      <div class="w-8 h-8 rounded-full bg-error-container/30 text-error flex items-center justify-center shrink-0 mt-0.5">
+        <span class="material-symbols-outlined text-[19px]">warning</span>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <h4 class="font-bold text-xs uppercase tracking-wide text-error">
+            Modo Supervivencia Activo
+          </h4>
+          <span class="badge badge-error text-error-content badge-xs font-black">SIN GRACIA</span>
+        </div>
+        <p class="text-[11px] text-on-surface-variant font-medium leading-relaxed mt-0.5">
+          Has perdido el periodo de gracia en tus tarjetas. Todo cobro a crédito generará intereses inmediatos. <strong>Usa Débito o cancela</strong>.
         </p>
       </div>
     </div>
-  )}
 
-  <!-- CHECKLIST: FUGAS A CORTAR HOY (Suscripciones a cancelar) -->
-  <section class="card bg-base-200 border border-error/30 shadow-xl mb-5 overflow-hidden">
-    <div class="card-body p-4">
-      <div class="flex justify-between items-center">
-        <div class="flex items-center gap-2">
-          <span class="text-xl">✂️</span>
-          <div>
-            <h3 class="font-black text-sm uppercase tracking-wide text-error">
-              Fugas a Cortar Hoy
-            </h3>
-            <p class="text-[10px] text-base-content/70">
-              Marca las suscripciones al cancelarlas para detener fugas:
-            </p>
-          </div>
+    <!-- ALERTA PROACTIVA DE DEUDA FIJA (Días 17 al 20) -->
+    {isDebtAlertActive && (
+      <div class="rounded-2xl bg-surface-container-high p-3.5 border border-warning/40 shadow-sm flex items-start gap-3 animate-pulse">
+        <div class="w-8 h-8 rounded-full bg-warning/20 text-warning flex items-center justify-center shrink-0 mt-0.5">
+          <span class="material-symbols-outlined text-[19px]">notifications_active</span>
         </div>
-        <span class="badge badge-error text-error-content font-black text-[10px] py-2">
-          $54.98 / mes
-        </span>
-      </div>
-
-      <div class="divider my-1"></div>
-
-      <div class="space-y-2 mt-0.5" id="leaks-checklist">
-        <!-- Item 1 -->
-        <label class="flex items-center gap-3 p-2 rounded-xl bg-base-100 border border-base-content/5 cursor-pointer hover:border-error/40 transition-colors">
-          <input
-            type="checkbox"
-            data-leak-id="nanonoble"
-            class="checkbox checkbox-error checkbox-sm"
-          />
-          <div class="flex-1 flex justify-between items-center text-xs">
-            <span class="font-bold text-base-content leak-title">Cancelar Nanonoble</span>
-            <span class="badge badge-neutral badge-xs font-extrabold text-error">$20.00</span>
-          </div>
-        </label>
-
-        <!-- Item 2 -->
-        <label class="flex items-center gap-3 p-2 rounded-xl bg-base-100 border border-base-content/5 cursor-pointer hover:border-error/40 transition-colors">
-          <input
-            type="checkbox"
-            data-leak-id="appleone"
-            class="checkbox checkbox-error checkbox-sm"
-          />
-          <div class="flex-1 flex justify-between items-center text-xs">
-            <span class="font-bold text-base-content leak-title">Cancelar Apple One</span>
-            <span class="badge badge-neutral badge-xs font-extrabold text-error">$16.95</span>
-          </div>
-        </label>
-
-        <!-- Item 3 -->
-        <label class="flex items-center gap-3 p-2 rounded-xl bg-base-100 border border-base-content/5 cursor-pointer hover:border-error/40 transition-colors">
-          <input
-            type="checkbox"
-            data-leak-id="amazonprime"
-            class="checkbox checkbox-error checkbox-sm"
-          />
-          <div class="flex-1 flex justify-between items-center text-xs">
-            <span class="font-bold text-base-content leak-title">Cancelar Amazon Prime</span>
-            <span class="badge badge-neutral badge-xs font-extrabold text-error">$16.04</span>
-          </div>
-        </label>
-
-        <!-- Item 4 -->
-        <label class="flex items-center gap-3 p-2 rounded-xl bg-base-100 border border-base-content/5 cursor-pointer hover:border-error/40 transition-colors">
-          <input
-            type="checkbox"
-            data-leak-id="twitch"
-            class="checkbox checkbox-error checkbox-sm"
-          />
-          <div class="flex-1 flex justify-between items-center text-xs">
-            <span class="font-bold text-base-content leak-title">Cancelar Twitch</span>
-            <span class="badge badge-neutral badge-xs font-extrabold text-error">$1.99</span>
-          </div>
-        </label>
-      </div>
-    </div>
-  </section>
-
-  <!-- TARJETA RESUMEN FINANCIERO: SALARIO & CONTROL GLOBAL -->
-  <section class="card bg-base-200 border border-base-300 shadow-2xl mb-5 text-base-content overflow-hidden">
-    <div class="card-body p-4.5">
-      <div class="flex justify-between items-start">
         <div>
-          <span class="text-[11px] font-bold tracking-wider text-primary uppercase">Salario Mensual</span>
-          <h2 class="text-2xl font-black tracking-tight text-base-content mt-0.5">
-            L. {MONTHLY_SALARY.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
-          </h2>
+          <h4 class="font-bold text-xs uppercase tracking-wider text-warning">
+            ¡Compromiso Crítico Día 20!
+          </h4>
+          <p class="text-xs text-on-surface font-semibold leading-snug mt-0.5">
+            Separa L. 4,400 para tarjetas/préstamo antes del día 20.
+          </p>
         </div>
-        <div class="badge badge-primary text-primary-content font-extrabold text-xs py-2 px-2.5">
-          {currentMonthLabel}
+      </div>
+    )}
+
+    <!-- RESUMEN DE BALANCE MENSUAL (HERO CARD CANOPY NOCTURNE) -->
+    <section class="bg-surface-container rounded-2xl p-4.5 border border-outline-variant/20 shadow-md flex flex-col gap-3 relative overflow-hidden">
+      <div class="flex items-center justify-between">
+        <div class="flex flex-col">
+          <span class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">
+            Control Mensual
+          </span>
+          <span class="font-bold text-base text-on-surface tracking-tight font-headline">
+            Liquidez Real Disponible
+          </span>
+        </div>
+        <div class="flex items-center gap-1 bg-surface-container-high px-3 py-1 rounded-full text-secondary text-xs font-semibold">
+          <span class="material-symbols-outlined text-[15px]">calendar_today</span>
+          <span>Octubre</span>
         </div>
       </div>
 
-      <!-- Métricas Clave con deducción estricta de compromisos intocables -->
-      <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-base-300 text-xs">
-        <div class="bg-base-300/80 p-2.5 rounded-xl border border-primary/20">
-          <div class="flex items-center justify-between">
-            <span class="text-base-content/70 block text-[10px] font-bold">Compromisos Fijos:</span>
-            <span class="badge badge-xs badge-neutral text-[9px] font-bold">Congelado</span>
-          </div>
-          <span class="font-black text-warning text-sm">
+      <!-- Cifra y Barra Minimalista Orgánica -->
+      <div class="flex flex-col gap-1 my-0.5">
+        <div class="flex items-baseline gap-2 flex-wrap">
+          <span class="text-3xl sm:text-4xl font-extrabold tracking-tight text-on-surface font-headline">
+            L. {disposableSalary.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+          </span>
+          <span class="text-xs text-on-surface-variant font-medium">
+            / L. {MONTHLY_SALARY.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+
+        <!-- Barra de progreso orgánica sutil -->
+        <div class="w-full bg-surface-container-lowest h-2 rounded-full overflow-hidden mt-1.5">
+          <div
+            class="bg-primary h-full rounded-full transition-all duration-500 ease-out"
+            style={`width: ${Math.max(5, 100 - overallSpentPct)}%`}
+          ></div>
+        </div>
+
+        <div class="flex justify-between items-center text-[11px] text-on-surface-variant font-medium pt-0.5">
+          <span>L. 8,750 Congelados al inicio</span>
+          <span class="text-primary font-semibold">
+            {disposableSalary > 0 ? 'Liquidez controlada' : 'Límite alcanzado'}
+          </span>
+        </div>
+      </div>
+
+      <!-- Indicadores Secundarios en Surface-Container-Low -->
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <div class="bg-surface-container-low p-2.5 rounded-xl border border-outline-variant/10 flex flex-col gap-0.5">
+          <span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
+            Compromisos Fijos
+          </span>
+          <span class="text-xs sm:text-sm font-bold text-secondary font-headline">
             -L. {UNTOUCHABLE_COMMITMENTS_TOTAL.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
           </span>
-          <span class="text-[9px] text-base-content/50 block mt-0.5">Maestría + Deuda</span>
+          <span class="text-[9px] text-on-surface-variant/70">Maestría + Préstamo</span>
         </div>
-        <div class="bg-base-300/80 p-2.5 rounded-xl border border-base-content/5">
-          <span class="text-base-content/70 block text-[10px] font-bold">Gastos Variables Mes:</span>
-          <span class="font-black text-error text-sm">
+        <div class="bg-surface-container-low p-2.5 rounded-xl border border-outline-variant/10 flex flex-col gap-0.5">
+          <span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
+            Gastos Variables
+          </span>
+          <span class="text-xs sm:text-sm font-bold text-error font-headline">
             L. {totalVariableSpent.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
           </span>
-          <span class="text-[9px] text-base-content/50 block mt-0.5">Super, Gas, Ocio, Soft</span>
+          <span class="text-[9px] text-on-surface-variant/70">Super, Gas, Ocio, Soft</span>
         </div>
       </div>
+    </section>
 
-      <!-- Saldo Restante Real Automático -->
-      <div class="mt-3 text-center text-xs py-2 px-3 rounded-xl border border-primary/30 bg-primary/10 flex flex-col gap-0.5">
-        <span class="text-[10px] uppercase font-bold text-base-content/70">
-          Liquidez Real Disponible (Te Quedan):
-        </span>
-        <strong class="text-primary font-black text-lg">
-          L. {disposableSalary.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
-        </strong>
-        <span class="text-[9px] text-base-content/60">
-          (Salario L. 26,518 - L. 8,750 Fijos Congelados - L. {totalVariableSpent.toFixed(2)} Variables)
-        </span>
-      </div>
-    </div>
-  </section>
-
-  <!-- 🔒 SECCIÓN COMPROMISOS INTOCABLES (MAESTRÍA Y DEUDAS FIJAS) -->
-  <section class="card bg-base-200 border-2 border-primary/50 shadow-2xl mb-5 overflow-hidden">
-    <div class="card-body p-4.5">
-      <div class="flex justify-between items-center mb-1">
+    <!-- 🔒 SECCIÓN COMPROMISOS INTOCABLES (MAESTRÍA & DEUDAS FIJAS) -->
+    <section id="section-commitments" class="bg-surface-container rounded-2xl p-4 border-2 border-primary/30 shadow-md flex flex-col gap-3">
+      <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <span class="text-xl">🔒</span>
+          <div class="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-[17px]">lock</span>
+          </div>
           <div>
-            <h3 class="font-black text-sm uppercase tracking-wide text-primary">
+            <h2 class="font-bold text-sm text-on-surface tracking-tight font-headline">
               Compromisos Intocables
-            </h3>
-            <p class="text-[10px] text-base-content/70 font-semibold">
-              L. 8,750.00 congelados al inicio de cada mes (Checklist Financiero)
+            </h2>
+            <p class="text-[10px] text-on-surface-variant">
+              L. 8,750.00 congelados al inicio de cada mes
             </p>
           </div>
         </div>
-        <span class="badge badge-primary text-primary-content text-[10px] font-black py-1 px-2">
+        <span class="badge badge-primary text-on-primary text-[9px] font-bold px-2 py-0.5">
           PRIORIDAD MÁXIMA
         </span>
       </div>
 
-      <div class="divider my-1"></div>
-
-      <!-- Tarjetas de Compromisos Intocables (Sin barra de colores, con Checklist/Botón de Pago) -->
-      <div class="space-y-3 mt-1">
+      <!-- Tarjetas de Compromisos Intocables (Checklist Financiero) -->
+      <div class="bg-surface-container-lowest rounded-xl overflow-hidden divide-y divide-surface-container-high border border-outline-variant/10">
         {untouchableCommitments.map((cat) => (
-          <div
-            class={`card border p-3.5 rounded-2xl transition-all shadow-sm ${
-              cat.isPaid
-                ? 'bg-success/10 border-success/40 text-base-content'
-                : 'bg-base-100 border-base-content/15 hover:border-primary/50 text-base-content'
-            }`}
-          >
-            <div class="flex justify-between items-center gap-2">
-              <div class="flex items-center gap-3">
-                <span class="text-2xl">{cat.icon}</span>
-                <div>
-                  <h4 class="font-extrabold text-sm text-base-content leading-tight">
-                    {cat.name}
-                  </h4>
-                  <span class="text-xs font-black text-primary block mt-0.5">
-                    L. {cat.monthlyLimit.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
+          <div class="p-3.5 flex items-center justify-between hover:bg-surface-container-high/30 transition-colors">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary shrink-0 shadow-sm">
+                <span class="material-symbols-outlined text-[20px]">{cat.materialIcon}</span>
               </div>
-
-              <!-- Estado de Checklist Financiero: PAGADO vs Botón Registrar Pago -->
-              <div>
-                {cat.isPaid ? (
-                  <div class="flex items-center gap-1.5 bg-success/20 text-success border border-success/40 px-3 py-1.5 rounded-xl font-black text-xs shadow-sm">
-                    <span class="text-sm">✓</span>
-                    <span>PAGADO</span>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    class="btn btn-primary btn-sm text-primary-content font-black normal-case text-xs shadow-md btn-pay-commitment"
-                    data-cat-id={cat.id}
-                    data-cat-name={cat.name}
-                    data-cat-amount={cat.monthlyLimit}
-                  >
-                    <span>Registrar Pago</span>
-                  </button>
-                )}
+              <div class="min-w-0">
+                <h3 class="font-bold text-xs text-on-surface truncate font-headline">
+                  {cat.name}
+                </h3>
+                <span class="text-[10px] text-on-surface-variant block">
+                  {cat.name.toLowerCase().includes('maestr') ? 'Mensualidad Maestría' : 'Cuota Crédito Día 20'}
+                </span>
               </div>
             </div>
 
-            <!-- Detalle informativo -->
-            <div class="mt-2 pt-2 border-t border-base-content/5 flex justify-between items-center text-[10px] text-base-content/60 font-medium">
-              <span>
-                {cat.isPaid
-                  ? `Completado este mes (L. ${cat.currentSpent.toFixed(2)})`
-                  : 'Pendiente de registrar en banco'}
+            <div class="flex flex-col items-end gap-1 shrink-0">
+              <span class="font-bold text-xs text-on-surface tabular-nums">
+                L. {cat.monthlyLimit.toLocaleString('es-HN', { minimumFractionDigits: 2 })}
               </span>
-              <span class="badge badge-ghost badge-xs text-[9px] font-bold">
-                Débito Obligatorio
-              </span>
+
+              {cat.isPaid ? (
+                <span class="bg-primary/20 text-primary px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                  <span class="material-symbols-outlined text-[13px]">check_circle</span>
+                  PAGADO
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  class="btn-pay-commitment text-[11px] font-semibold text-secondary bg-surface-container px-3 py-1 rounded-full hover:bg-primary hover:text-on-primary transition-all active:scale-95 shadow-sm border border-outline-variant/20"
+                  data-cat-id={cat.id}
+                  data-cat-name={cat.name}
+                  data-cat-amount={cat.monthlyLimit}
+                >
+                  Registrar Pago
+                </button>
+              )}
             </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </section>
-
-  <!-- DASHBOARD DE GASTOS VARIABLES CON BARRAS DE PROGRESO DAISYUI -->
-  <section class="mb-6">
-    <div class="flex justify-between items-center mb-3">
-      <h3 class="font-extrabold text-sm text-base-content flex items-center gap-1.5 uppercase tracking-wide">
-        🛡️ Gastos Variables & Bloqueos Duros
-      </h3>
-      <span class="text-[11px] text-base-content/60 font-semibold">
-        {variableCategories.length} Categorías
-      </span>
-    </div>
-
-    <div class="space-y-3">
-      {variableCategories.map((cat) => (
-        <div class="card bg-base-200 border border-base-300 shadow-md p-3.5 hover:border-primary/40 transition-all">
-          <div class="flex justify-between items-center mb-1.5">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">{cat.icon}</span>
-              <div>
-                <span class="font-bold text-sm text-base-content block leading-tight">{cat.name}</span>
-                {cat.isOcioDanger && (
-                  <span class="badge badge-error text-error-content text-[9px] py-0 px-1.5 font-black animate-pulse">
-                    ⚠️ ALERTA: &gt; L. 1,000 Gastados
-                  </span>
-                )}
-              </div>
-            </div>
-            <span class={`badge badge-sm ${cat.badgeClass}`}>
-              {cat.percentage}%
-            </span>
-          </div>
-
-          <!-- Barra de Progreso DaisyUI con regla Ocio > 1000 en ROJO -->
-          <progress
-            class={`progress ${cat.progressClass} w-full h-2.5 my-1.5`}
-            value={cat.currentSpent}
-            max={cat.monthlyLimit}
-          ></progress>
-
-          <div class="flex justify-between items-center text-xs text-base-content/70 font-medium mt-0.5">
-            <span>Gastado: <strong class="text-base-content font-bold">L. {cat.currentSpent.toFixed(2)}</strong></span>
-            <span>Límite: L. {cat.monthlyLimit.toFixed(2)}</span>
-          </div>
-
-          {cat.isHardStopTriggered && (
-            <div class="text-[10px] text-error font-extrabold mt-1.5 flex items-center gap-1 bg-error/15 p-1.5 rounded-lg border border-error/30">
-              🛑 <span>Hard Stop Activo: Límite mensual agotado. Compras bloqueadas.</span>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  </section>
-
-  <!-- Historial Reciente de Gastos -->
-  {recentTransactions.length > 0 && (
-    <section class="mb-4">
-      <h3 class="font-extrabold text-sm text-base-content flex items-center gap-1.5 uppercase tracking-wide mb-2.5">
-        ⏱️ Últimos Movimientos
-      </h3>
-      <div class="space-y-2">
-        {recentTransactions.map((item) => (
-          <div class="card bg-base-200 border border-base-300 shadow-sm p-3 flex flex-row items-center justify-between">
-            <div class="flex items-center gap-2.5">
-              <span class="text-base">{item.icon}</span>
-              <div>
-                <p class="font-bold text-xs text-base-content leading-tight">{item.description}</p>
-                <div class="flex items-center gap-1.5 mt-0.5">
-                  <span class="text-[10px] text-base-content/60">{item.categoryName} • {item.formattedDate}</span>
-                  {item.paymentMethod === 'TARJETA_CREDITO' ? (
-                    <span class="badge badge-error badge-xs text-[8px] font-black py-0 px-1">💳 Crédito</span>
-                  ) : (
-                    <span class="badge badge-success badge-xs text-[8px] font-black py-0 px-1">💵 Débito</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <span class="font-extrabold text-xs text-primary">L. {item.amount}</span>
           </div>
         ))}
       </div>
     </section>
-  )}
 
-  <!-- Floating Action Button (FAB) Fijo Abajo a la Derecha -->
+    <!-- CHECKLIST: FUGAS A CORTAR HOY (SUSCRIPCIONES) -->
+    <section id="section-checklist" class="bg-surface-container rounded-2xl p-4 border border-outline-variant/20 shadow-md flex flex-col gap-3">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-full bg-error-container/30 text-error flex items-center justify-center">
+            <span class="material-symbols-outlined text-[17px]">content_cut</span>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-on-surface tracking-tight font-headline">
+              Fugas a Cortar Hoy
+            </h3>
+            <p class="text-[10px] text-on-surface-variant">
+              Marca las suscripciones al cancelarlas para recuperar liquidez:
+            </p>
+          </div>
+        </div>
+        <span class="badge badge-error text-error-content text-[10px] font-bold px-2">
+          $54.98 / mes
+        </span>
+      </div>
+
+      <div class="space-y-1.5" id="leaks-checklist">
+        <!-- Item 1 -->
+        <label class="flex items-center gap-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/10 cursor-pointer hover:bg-surface-container-high transition-colors">
+          <input
+            type="checkbox"
+            data-leak-id="nanonoble"
+            class="checkbox checkbox-error checkbox-sm rounded-md"
+          />
+          <div class="flex-1 flex justify-between items-center text-xs">
+            <span class="font-medium text-on-surface leak-title">Cancelar Nanonoble</span>
+            <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$20.00</span>
+          </div>
+        </label>
+
+        <!-- Item 2 -->
+        <label class="flex items-center gap-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/10 cursor-pointer hover:bg-surface-container-high transition-colors">
+          <input
+            type="checkbox"
+            data-leak-id="appleone"
+            class="checkbox checkbox-error checkbox-sm rounded-md"
+          />
+          <div class="flex-1 flex justify-between items-center text-xs">
+            <span class="font-medium text-on-surface leak-title">Cancelar Apple One</span>
+            <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$16.95</span>
+          </div>
+        </label>
+
+        <!-- Item 3 -->
+        <label class="flex items-center gap-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/10 cursor-pointer hover:bg-surface-container-high transition-colors">
+          <input
+            type="checkbox"
+            data-leak-id="amazonprime"
+            class="checkbox checkbox-error checkbox-sm rounded-md"
+          />
+          <div class="flex-1 flex justify-between items-center text-xs">
+            <span class="font-medium text-on-surface leak-title">Cancelar Amazon Prime</span>
+            <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$16.04</span>
+          </div>
+        </label>
+
+        <!-- Item 4 -->
+        <label class="flex items-center gap-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/10 cursor-pointer hover:bg-surface-container-high transition-colors">
+          <input
+            type="checkbox"
+            data-leak-id="twitch"
+            class="checkbox checkbox-error checkbox-sm rounded-md"
+          />
+          <div class="flex-1 flex justify-between items-center text-xs">
+            <span class="font-medium text-on-surface leak-title">Cancelar Twitch</span>
+            <span class="bg-surface-container px-2 py-0.5 rounded-full text-[10px] font-bold text-error">$1.99</span>
+          </div>
+        </label>
+      </div>
+    </section>
+
+    <!-- DISTRIBUCIÓN POR CATEGORÍA (GASTOS VARIABLES) -->
+    <section id="section-expenses" class="flex flex-col gap-2.5">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="font-bold text-sm text-on-surface tracking-tight font-headline">
+          Distribución por categoría
+        </h2>
+        <span class="text-[11px] text-secondary font-medium">Límites Estrictos</span>
+      </div>
+
+      <div class="bg-surface-container rounded-2xl p-4 flex flex-col gap-3.5 border border-outline-variant/20 shadow-md">
+        {variableCategories.map((cat) => (
+          <div class="flex flex-col gap-1.5">
+            <div class="flex justify-between items-center text-xs">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-tertiary">
+                  {cat.materialIcon}
+                </span>
+                <span class="font-semibold text-on-surface">{cat.name}</span>
+                {cat.isOcioDanger && (
+                  <span class="text-[9px] text-error font-bold bg-error/15 px-1.5 py-0.5 rounded-full animate-pulse border border-error/20">
+                    &gt; L. 1,000
+                  </span>
+                )}
+              </div>
+              <span class="font-medium text-on-surface tabular-nums">
+                L. {cat.currentSpent.toFixed(0)}{' '}
+                <span class="text-on-surface-variant font-normal">
+                  / L. {cat.monthlyLimit.toFixed(0)}
+                </span>
+              </span>
+            </div>
+
+            <!-- Barra de progreso orgánica sutil -->
+            <div class="w-full bg-surface-container-lowest h-1.5 rounded-full overflow-hidden">
+              <div
+                class={`${cat.barColorClass} h-full rounded-full transition-all duration-500`}
+                style={`width: ${cat.percentage}%`}
+              ></div>
+            </div>
+
+            {cat.isHardStopTriggered && (
+              <div class="text-[10px] text-error font-semibold flex items-center gap-1 bg-error/10 p-1.5 rounded-lg border border-error/20">
+                <span class="material-symbols-outlined text-[13px]">block</span>
+                <span>Hard Stop Activo: Límite mensual agotado. Compras bloqueadas.</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- HISTORIAL RECIENTE DE GASTOS -->
+    {recentTransactions.length > 0 && (
+      <section class="flex flex-col gap-2.5">
+        <div class="flex items-center justify-between px-1">
+          <h2 class="font-bold text-sm text-on-surface tracking-tight font-headline">
+            Últimos movimientos
+          </h2>
+          <span class="text-[11px] text-on-surface-variant font-medium">Recientes</span>
+        </div>
+
+        <div class="bg-surface-container rounded-2xl overflow-hidden divide-y divide-surface-container-high border border-outline-variant/20 shadow-md">
+          {recentTransactions.map((item) => (
+            <div class="p-3 flex items-center justify-between hover:bg-surface-container-high/30 transition-colors">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-full bg-surface-container-lowest flex items-center justify-center text-tertiary shrink-0">
+                  <span class="material-symbols-outlined text-[17px]">{item.materialIcon}</span>
+                </div>
+                <div>
+                  <p class="font-bold text-xs text-on-surface leading-tight">{item.description}</p>
+                  <div class="flex items-center gap-1.5 mt-0.5">
+                    <span class="text-[10px] text-on-surface-variant">
+                      {item.categoryName} • {item.formattedDate}
+                    </span>
+                    {item.paymentMethod === 'TARJETA_CREDITO' ? (
+                      <span class="bg-error/15 text-error px-1.5 py-0.2 rounded-full text-[9px] font-bold">
+                        Crédito
+                      </span>
+                    ) : (
+                      <span class="bg-primary/15 text-primary px-1.5 py-0.2 rounded-full text-[9px] font-bold">
+                        Débito
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <span class="font-bold text-xs text-on-surface tabular-nums">
+                L. {item.amount}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+
+  </div>
+
+  <!-- FLOATING ACTION BUTTON (FAB) ESTILO CANOPY EMERALD -->
   <button
     id="btn-open-fab"
     type="button"
-    class="btn btn-circle btn-primary text-primary-content shadow-2xl fixed bottom-6 right-6 z-40 text-2xl font-black hover:scale-110 active:scale-95 transition-transform"
-    title="Registrar Gasto Rápido"
+    class="w-14 h-14 rounded-full bg-primary text-on-primary shadow-[0_4px_20px_rgba(30,184,84,0.35)] fixed bottom-20 right-6 z-40 flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
+    title="Añadir transacción"
   >
-    +
+    <span class="material-symbols-outlined text-[28px]">add</span>
   </button>
 
-  <!-- Dialog / Bottom Sheet Modal de DaisyUI -->
+  <!-- MODAL / BOTTOM SHEET: NUEVO GASTO (CANOPY NOCTURNE DESIGN SYSTEM) -->
   <dialog id="modal_quick_expense" class="modal modal-bottom sm:modal-middle">
-    <div class="modal-box p-5 bg-base-200 border border-base-300 text-base-content max-w-md mx-auto shadow-2xl">
+    <div class="modal-box p-5 bg-surface-container border border-outline-variant/30 text-on-surface max-w-md mx-auto shadow-2xl rounded-t-3xl sm:rounded-3xl">
       <div class="flex justify-between items-center mb-3">
-        <h3 class="font-black text-base text-base-content flex items-center gap-1.5">
-          ⚡ Registrar Gasto Rápido
-        </h3>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-[19px]">add_circle</span>
+          </div>
+          <h3 class="font-bold text-base text-on-surface font-headline">
+            Nueva Transacción
+          </h3>
+        </div>
         <form method="dialog">
-          <button class="btn btn-sm btn-circle btn-ghost text-base-content/60">✕</button>
+          <button class="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center hover:text-on-surface transition-colors">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
         </form>
       </div>
 
-      <form id="cronos-transaction-form" class="space-y-3.5">
-        <!-- Input de Número Gigante -->
-        <div class="form-control text-center py-1">
-          <label class="label-text text-xs text-base-content/60 uppercase font-bold tracking-wider mb-1 block">
-            Monto a Registrar
+      <form id="cronos-transaction-form" class="space-y-4">
+        <!-- Display de Monto Gigante (como en nuevo_gasto_daisyui_forest) -->
+        <div class="relative overflow-hidden rounded-2xl bg-surface-container-lowest p-4 text-center border border-outline-variant/15 shadow-inner">
+          <label class="block text-[10px] text-tertiary uppercase tracking-wider font-semibold mb-1" for="quick_amount">
+            Monto a debitar
           </label>
-          <div class="flex items-center justify-center">
-            <span class="text-3xl font-black text-primary mr-1">L.</span>
+          <div class="inline-flex items-center justify-center text-3xl font-extrabold text-on-surface tracking-tight font-headline">
+            <span class="text-primary mr-1 font-bold">L.</span>
             <input
               type="number"
               id="quick_amount"
@@ -626,97 +681,104 @@ const totalSpentAll = totalVariableSpent + totalUntouchableSpent;
               min="0.01"
               placeholder="0.00"
               required
-              class="text-4xl text-center font-black input input-ghost w-48 border-b-2 border-primary focus:outline-none focus:border-primary text-base-content"
+              class="w-44 text-center bg-transparent border-b-2 border-primary focus:outline-none text-on-surface font-extrabold text-3xl placeholder:text-on-surface-variant/40"
+            />
+          </div>
+          <p class="text-[10px] text-outline mt-1 font-medium">Validado contra Neon PostgreSQL</p>
+        </div>
+
+        <!-- Método de Pago Pill Toggle (como en mockups) -->
+        <div class="space-y-1">
+          <span class="block text-xs font-semibold text-on-surface-variant ml-1">
+            Método de Pago (Bloqueo de Plástico)
+          </span>
+          <div class="grid grid-cols-2 gap-2 bg-surface-container-lowest p-1.5 rounded-full border border-outline-variant/15" id="payment-methods-pills">
+            <label class="cursor-pointer py-2 px-3 rounded-full text-center transition-all flex items-center justify-center gap-1.5 has-[:checked]:bg-surface-container-high has-[:checked]:text-primary text-on-surface-variant font-semibold text-xs">
+              <input
+                type="radio"
+                name="payment_method"
+                id="pm_debito"
+                value="DEBITO_EFECTIVO"
+                checked
+                class="hidden"
+              />
+              <span class="material-symbols-outlined text-[16px]">payments</span>
+              <span>Débito / Efec.</span>
+            </label>
+
+            <label class="cursor-pointer py-2 px-3 rounded-full text-center transition-all flex items-center justify-center gap-1.5 has-[:checked]:bg-error/20 has-[:checked]:text-error text-on-surface-variant font-semibold text-xs">
+              <input
+                type="radio"
+                name="payment_method"
+                id="pm_credito"
+                value="TARJETA_CREDITO"
+                class="hidden"
+              />
+              <span class="material-symbols-outlined text-[16px]">credit_card</span>
+              <span>Crédito</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Selector de Categoría -->
+        <div class="space-y-1">
+          <label class="block text-xs font-semibold text-on-surface-variant ml-1" for="quick_category_id">
+            Categoría
+          </label>
+          <div class="relative flex items-center">
+            <select
+              id="quick_category_id"
+              name="category_id"
+              required
+              class="w-full bg-surface-container-low text-on-surface rounded-full py-2.5 px-4 text-xs font-semibold appearance-none focus:outline-none focus:bg-surface-container-high border border-outline-variant/15 pr-8"
+            >
+              <option value="" disabled selected>Selecciona categoría...</option>
+              <optgroup label="🔒 Compromisos Intocables">
+                {untouchableCommitments.map((c) => (
+                  <option value={c.id}>
+                    {c.icon} {c.name} (L. {c.monthlyLimit.toFixed(2)})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="🛡️ Gastos Variables">
+                {variableCategories.map((c) => (
+                  <option value={c.id}>
+                    {c.icon} {c.name} (Disponible: L. {c.remaining.toFixed(2)})
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            <span class="material-symbols-outlined absolute right-3 pointer-events-none text-on-surface-variant text-[18px]">
+              expand_more
+            </span>
+          </div>
+        </div>
+
+        <!-- Concepto o Establecimiento -->
+        <div class="space-y-1">
+          <label class="block text-xs font-semibold text-on-surface-variant ml-1" for="quick_description">
+            Concepto
+          </label>
+          <div class="flex items-center bg-surface-container-low rounded-full px-4 py-2.5 border border-outline-variant/15">
+            <span class="material-symbols-outlined text-outline text-[18px] mr-2">store</span>
+            <input
+              type="text"
+              id="quick_description"
+              name="description"
+              placeholder="Ej. Supermercado, combustible, café..."
+              class="w-full bg-transparent text-xs text-on-surface placeholder:text-outline focus:outline-none font-medium"
             />
           </div>
         </div>
 
-        <!-- Selector de Método de Pago: Bloqueo de Plástico -->
-        <div class="form-control">
-          <label class="label py-0.5">
-            <span class="label-text text-xs font-bold text-base-content">¿Con qué vas a pagar?</span>
-          </label>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="cursor-pointer label border border-base-content/15 rounded-xl p-2 bg-base-100 hover:border-success transition-all has-[:checked]:border-success has-[:checked]:bg-success/10">
-              <div class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="payment_method"
-                  id="pm_debito"
-                  value="DEBITO_EFECTIVO"
-                  checked
-                  class="radio radio-success radio-xs"
-                />
-                <div class="text-left">
-                  <span class="label-text text-xs font-black block text-base-content leading-none">💵 Débito / Efec.</span>
-                  <span class="text-[9px] text-success font-bold">Sin interés</span>
-                </div>
-              </div>
-            </label>
-
-            <label class="cursor-pointer label border border-base-content/15 rounded-xl p-2 bg-base-100 hover:border-error transition-all has-[:checked]:border-error has-[:checked]:bg-error/10">
-              <div class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="payment_method"
-                  id="pm_credito"
-                  value="TARJETA_CREDITO"
-                  class="radio radio-error radio-xs"
-                />
-                <div class="text-left">
-                  <span class="label-text text-xs font-black block text-base-content leading-none">💳 Tarjeta Crédito</span>
-                  <span class="text-[9px] text-error font-bold">¡Interés HOY!</span>
-                </div>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <!-- Selector de Categorías -->
-        <div class="form-control">
-          <label class="label py-0.5">
-            <span class="label-text text-xs font-bold text-base-content">Categoría</span>
-          </label>
-          <select id="quick_category_id" name="category_id" required class="select select-bordered select-sm w-full bg-base-100 text-base-content font-semibold">
-            <option value="" disabled selected>Selecciona categoría...</option>
-            <optgroup label="🔒 Compromisos Intocables">
-              {untouchableCommitments.map((c) => (
-                <option value={c.id}>
-                  {c.icon} {c.name} (L. {c.monthlyLimit.toFixed(2)})
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="🛡️ Gastos Variables">
-              {variableCategories.map((c) => (
-                <option value={c.id}>
-                  {c.icon} {c.name} (Disponible: L. {c.remaining.toFixed(2)})
-                </option>
-              ))}
-            </optgroup>
-          </select>
-        </div>
-
-        <!-- Descripción -->
-        <div class="form-control">
-          <label class="label py-0.5">
-            <span class="label-text text-xs font-bold text-base-content">Descripción</span>
-          </label>
-          <input
-            type="text"
-            id="quick_description"
-            name="description"
-            placeholder="Ej. Despensa, combustible, colegiatura..."
-            class="input input-bordered input-sm w-full bg-base-100 text-base-content font-medium"
-          />
-        </div>
-
-        <!-- Botón de Envío -->
+        <!-- Botón Primario de Guardado Forest -->
         <button
           type="submit"
           id="btn-submit-quick"
-          class="btn btn-primary text-primary-content btn-block font-extrabold normal-case text-sm mt-2 shadow-lg"
+          class="w-full h-12 rounded-full bg-primary text-on-primary font-bold text-xs flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all shadow-[0_4px_16px_rgba(30,184,84,0.3)] mt-2"
         >
-          <span id="btn-quick-text">Aplicar Gasto</span>
+          <span class="material-symbols-outlined text-[19px]">cloud_done</span>
+          <span id="btn-quick-text">Guardar transacción</span>
           <span id="btn-quick-spinner" class="loading loading-spinner loading-xs hidden"></span>
         </button>
       </form>
@@ -728,37 +790,38 @@ const totalSpentAll = totalVariableSpent + totalUntouchableSpent;
 
   <!-- MODAL DE ADVERTENCIA ROJA: BLOQUEO DE PLÁSTICO (INTERCEPCIÓN) -->
   <dialog id="modal_plastic_warning" class="modal modal-bottom sm:modal-middle">
-    <div class="modal-box p-5 bg-base-200 border-2 border-error text-base-content max-w-md mx-auto shadow-2xl">
+    <div class="modal-box p-5 bg-surface-container border-2 border-error text-on-surface max-w-md mx-auto shadow-2xl rounded-t-3xl sm:rounded-3xl">
       <div class="flex items-start gap-3">
-        <div class="w-12 h-12 rounded-2xl bg-error/20 text-error flex items-center justify-center text-2xl font-black shrink-0 border border-error/30 animate-pulse">
-          🛑
+        <div class="w-12 h-12 rounded-2xl bg-error-container/30 text-error flex items-center justify-center text-2xl font-black shrink-0 border border-error/30 animate-pulse">
+          <span class="material-symbols-outlined text-[26px]">block</span>
         </div>
         <div>
-          <h3 class="font-black text-base text-error uppercase tracking-tight">
+          <h3 class="font-extrabold text-base text-error uppercase tracking-tight font-headline">
             ¡ALTO LUIS!
           </h3>
-          <p class="text-xs text-base-content font-bold mt-1.5 leading-relaxed">
-            Perdiste tu periodo de gracia este mes. Si pasas la tarjeta por <strong class="text-error font-black text-sm">L. <span id="warning_card_amount">0.00</span></strong>, el banco te cobrará intereses desde HOY. Usa Débito o cancela la compra.
+          <p class="text-xs text-on-surface font-medium mt-1 leading-relaxed">
+            Perdiste tu periodo de gracia este mes. Si pasas la tarjeta por <strong class="text-error font-bold text-sm">L. <span id="warning_card_amount">0.00</span></strong>, el banco te cobrará intereses desde HOY. Usa Débito o cancela la compra.
           </p>
         </div>
       </div>
 
-      <div class="divider my-3"></div>
+      <div class="divider my-3 border-outline-variant/10"></div>
 
       <div class="flex flex-col gap-2 mt-1">
         <button
           type="button"
           id="btn-plastic-cancel"
-          class="btn btn-success text-success-content font-black text-xs normal-case shadow-md"
+          class="btn btn-primary text-on-primary rounded-full font-bold text-xs normal-case shadow-md h-11"
         >
-          ✅ Cambiar a Débito / Efectivo (Recomendado)
+          <span class="material-symbols-outlined text-[18px]">check_circle</span>
+          Cambiar a Débito / Efectivo (Recomendado)
         </button>
         <button
           type="button"
           id="btn-plastic-confirm"
-          class="btn btn-outline btn-error btn-xs font-bold text-[11px] normal-case opacity-75 hover:opacity-100"
+          class="btn btn-outline btn-error btn-xs rounded-full font-medium text-[11px] normal-case opacity-75 hover:opacity-100 py-2 h-auto"
         >
-          ⚠️ Confirmar bajo mi propio riesgo
+          Confirmar bajo mi propio riesgo
         </button>
       </div>
     </div>
@@ -771,7 +834,7 @@ const totalSpentAll = totalVariableSpent + totalUntouchableSpent;
 <script>
   // Control del Checklist "Fugas a Cortar Hoy" (Persistencia en LocalStorage)
   const checklistContainer = document.getElementById('leaks-checklist');
-  const LEAKS_STORAGE_KEY = 'cronos_survival_cancelled_leaks_v1';
+  const LEAKS_STORAGE_KEY = 'cronos_survival_cancelled_leaks_v2';
 
   function initChecklist() {
     let savedState: Record<string, boolean> = {};
@@ -890,9 +953,9 @@ const totalSpentAll = totalVariableSpent + totalUntouchableSpent;
     if (!toastContainer) return;
 
     const toastDiv = document.createElement('div');
-    toastDiv.className = `alert ${isError ? 'alert-error text-error-content' : 'alert-success text-success-content'} shadow-2xl text-xs font-extrabold flex items-center gap-2 pointer-events-auto transition-all animate-bounce border border-base-content/20`;
+    toastDiv.className = `alert ${isError ? 'alert-error text-error-content' : 'alert-success text-success-content'} shadow-2xl text-xs font-semibold flex items-center gap-2 pointer-events-auto transition-all animate-bounce border border-outline-variant/30 rounded-2xl`;
     toastDiv.innerHTML = `
-      <span>${isError ? '🛑' : '✅'}</span>
+      <span class="material-symbols-outlined text-[18px]">${isError ? 'error' : 'check_circle'}</span>
       <span>${message}</span>
     `;
 
@@ -988,7 +1051,7 @@ const totalSpentAll = totalVariableSpent + totalUntouchableSpent;
       showDaisyToast('Error de red al registrar la transacción.', true);
     } finally {
       btnSubmit.disabled = false;
-      btnText.textContent = 'Aplicar Gasto';
+      btnText.textContent = 'Guardar transacción';
       btnSpinner.classList.add('hidden');
       plasticRiskAccepted = false;
     }

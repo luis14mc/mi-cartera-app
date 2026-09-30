@@ -35,3 +35,37 @@
   --depth: 0;
   --noise: 0;
 }
+
+@theme {
+  --color-surface: #171212;
+  --color-surface-dim: #171212;
+  --color-surface-bright: #3e3838;
+  --color-surface-container-lowest: #120d0d;
+  --color-surface-container-low: #201a1a;
+  --color-surface-container: #241e1e;
+  --color-surface-container-high: #2e2928;
+  --color-surface-container-highest: #3a3333;
+  --color-on-surface: #ebe0df;
+  --color-on-surface-variant: #bccbb9;
+  --color-outline: #869485;
+  --color-outline-variant: #3d4a3d;
+  --color-canopy-primary: #1eb854;
+  --color-canopy-secondary: #44e2cd;
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+

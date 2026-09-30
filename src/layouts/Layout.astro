@@ -25,40 +25,41 @@ const { title } = Astro.props;
     <meta name="application-name" content="Control CRONOS" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
-    <!-- Google Fonts -->
+    <!-- Google Fonts & Material Symbols (Canopy Nocturne Design System) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
     <style is:global>
       body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+      h1, h2, h3, h4, .font-headline {
         font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
       }
     </style>
   </head>
-  <body class="min-h-screen bg-base-300 text-base-content antialiased flex flex-col items-center justify-start sm:py-4">
-    <!-- Contenedor Estrictamente Mobile-First (max-w-md) con tema Forest -->
-    <div class="w-full max-w-md min-h-screen sm:min-h-[92vh] sm:rounded-3xl flex flex-col bg-base-100 shadow-2xl relative overflow-x-hidden border border-base-content/10">
+  <body class="min-h-screen bg-surface-container-lowest text-on-surface antialiased flex flex-col items-center justify-start sm:py-4">
+    <!-- Contenedor Estrictamente Mobile-First (max-w-md) con Canopy Nocturne & DaisyUI Forest -->
+    <div class="w-full max-w-md min-h-screen sm:min-h-[92vh] sm:rounded-3xl flex flex-col bg-surface shadow-2xl relative overflow-x-hidden border border-outline-variant/30">
       
-      <!-- Header Mobile-First -->
-      <header class="navbar bg-base-100/95 backdrop-blur-md sticky top-0 z-40 border-b border-base-200 px-4 py-2">
+      <!-- Header Mobile-First Canopy Nocturne -->
+      <header class="navbar bg-surface/90 backdrop-blur-xl sticky top-0 z-40 border-b border-outline-variant/20 px-4 py-2.5">
         <div class="flex-1 items-center gap-2.5">
-          <div class="w-9 h-9 rounded-xl bg-primary text-primary-content flex items-center justify-center font-black shadow-md shadow-primary/20">
-            ⏳
+          <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold shadow-sm shadow-primary/20">
+            <span class="material-symbols-outlined text-[19px]">spa</span>
           </div>
           <div>
-            <h1 class="font-extrabold text-base tracking-tight leading-none text-base-content flex items-center gap-1.5">
-              CRONOS
+            <div class="flex items-center gap-1.5">
+              <h1 class="font-extrabold text-base tracking-tight leading-none text-on-surface">CRONOS</h1>
               <span class="badge badge-error text-error-content text-[9px] font-black uppercase tracking-wider py-0.5 px-1.5 animate-pulse">RESCATE</span>
-            </h1>
-            <span class="text-[10px] text-error font-black uppercase tracking-wider">MODO RESCATE (OCTUBRE)</span>
+            </div>
+            <span class="text-[10px] text-primary font-semibold uppercase tracking-wider block mt-0.5">Modo Supervivencia</span>
           </div>
         </div>
         <div class="flex-none gap-2">
           <!-- Avatar del Usuario -->
-          <div class="avatar placeholder">
-            <div class="bg-neutral text-neutral-content rounded-full w-8 ring-2 ring-primary ring-offset-base-100 ring-offset-1">
-              <span class="text-xs font-bold">LU</span>
-            </div>
+          <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xs shadow-sm">
+            <span class="material-symbols-outlined text-[18px]">person</span>
           </div>
         </div>
       </header>
@@ -67,6 +68,28 @@ const { title } = Astro.props;
       <main class="flex-1 p-4 pb-28">
         <slot />
       </main>
+
+      <!-- Bottom Navigation Bar (Canopy Nocturne Design System) -->
+      <nav class="fixed bottom-0 w-full max-w-md z-40 bg-surface-container-low/95 backdrop-blur-xl border-t border-outline-variant/20 shadow-[0_-1px_12px_rgba(0,0,0,0.4)]">
+        <div class="flex justify-around items-center h-16 px-2">
+          <a href="/" class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-1 transition-colors text-primary font-semibold">
+            <span class="material-symbols-outlined text-[22px]">grid_view</span>
+            <span class="text-[11px] font-medium tracking-tight">Dashboard</span>
+          </a>
+          <a href="#section-expenses" class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-1 text-on-surface-variant hover:text-on-surface transition-colors">
+            <span class="material-symbols-outlined text-[22px]">receipt_long</span>
+            <span class="text-[11px] font-medium tracking-tight">Gastos</span>
+          </a>
+          <a href="#section-commitments" class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-1 text-on-surface-variant hover:text-on-surface transition-colors">
+            <span class="material-symbols-outlined text-[22px]">payments</span>
+            <span class="text-[11px] font-medium tracking-tight">Pagos</span>
+          </a>
+          <a href="#section-checklist" class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] gap-1 text-on-surface-variant hover:text-on-surface transition-colors">
+            <span class="material-symbols-outlined text-[22px]">tune</span>
+            <span class="text-[11px] font-medium tracking-tight">Fugas</span>
+          </a>
+        </div>
+      </nav>
 
       <!-- Toast Container Nativo DaisyUI -->
       <div id="toast-container" class="toast toast-top toast-center z-50 pointer-events-none w-full max-w-xs transition-all"></div>
