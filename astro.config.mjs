@@ -1,15 +1,15 @@
 import { defineConfig } from 'astro/config';
 import vercel from '@astrojs/vercel';
-import tailwind from '@astrojs/tailwind';
+import tailwindcss from '@tailwindcss/vite';
 import AstroPWA from '@vite-pwa/astro';
 
 export default defineConfig({
   output: 'server',
   adapter: vercel(),
+  vite: {
+    plugins: [tailwindcss()],
+  },
   integrations: [
-    tailwind({
-      applyBaseStyles: true,
-    }),
     AstroPWA({
       mode: 'production',
       base: '/',
@@ -20,7 +20,7 @@ export default defineConfig({
         name: 'Control CRONOS',
         short_name: 'CRONOS',
         description: 'PWA de disciplina financiera estricta y bloqueos duros anti-fugas de gasto',
-        theme_color: '#1a73e8',
+        theme_color: '#181313',
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',
